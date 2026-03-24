@@ -1,0 +1,12 @@
+C:\Users\zhuya\Code\logs2obs\src\Logs2Obs.Core\bin\Release\net10.0\Logs2Obs.Core.deps.json
+C:\Users\zhuya\Code\logs2obs\src\Logs2Obs.Core\bin\Release\net10.0\Logs2Obs.Core.dll
+C:\Users\zhuya\Code\logs2obs\src\Logs2Obs.Core\bin\Release\net10.0\Logs2Obs.Core.pdb
+C:\Users\zhuya\Code\logs2obs\src\Logs2Obs.Core\obj\Release\net10.0\Logs2Obs.Core.csproj.AssemblyReference.cache
+C:\Users\zhuya\Code\logs2obs\src\Logs2Obs.Core\obj\Release\net10.0\Logs2Obs.Core.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\zhuya\Code\logs2obs\src\Logs2Obs.Core\obj\Release\net10.0\Logs2Obs.Core.AssemblyInfoInputs.cache
+C:\Users\zhuya\Code\logs2obs\src\Logs2Obs.Core\obj\Release\net10.0\Logs2Obs.Core.AssemblyInfo.cs
+C:\Users\zhuya\Code\logs2obs\src\Logs2Obs.Core\obj\Release\net10.0\Logs2Obs.Core.csproj.CoreCompileInputs.cache
+C:\Users\zhuya\Code\logs2obs\src\Logs2Obs.Core\obj\Release\net10.0\Logs2Obs.Core.dll
+C:\Users\zhuya\Code\logs2obs\src\Logs2Obs.Core\obj\Release\net10.0\refint\Logs2Obs.Core.dll
+C:\Users\zhuya\Code\logs2obs\src\Logs2Obs.Core\obj\Release\net10.0\Logs2Obs.Core.pdb
+C:\Users\zhuya\Code\logs2obs\src\Logs2Obs.Core\obj\Release\net10.0\ref\Logs2Obs.Core.dll

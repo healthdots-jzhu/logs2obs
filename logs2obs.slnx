@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Logs2Obs.Core/Logs2Obs.Core.csproj" />
+  </Folder>
+</Solution>

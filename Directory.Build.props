@@ -1,0 +1,11 @@
+<Project>
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Logs2Obs.Core'">
+    <PackageReference Update="AWSSDK.*" />
+    <PackageReference Update="Azure.*" />
+    <PackageReference Update="Google.Cloud.*" />
+  </ItemGroup>
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Logs2Obs.Core'">
+    <NoWarn>$(NoWarn)</NoWarn>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+</Project>
