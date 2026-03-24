@@ -1,3 +1,24 @@
+# .NET
+bin/
+obj/
+*.user
+.vs/
+.idea/
+
+# local dev
+docker/volumes/
+*.env.local
+appsettings.Local.json
+
+# DuckDB local files
+*.duckdb
+*.duckdb.wal
+
+# Secrets
+secrets/
+*.pem
+*.key
+
 # Squad: ignore runtime state (logs, inbox, sessions)
 .squad/orchestration-log/
 .squad/log/

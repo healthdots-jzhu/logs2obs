@@ -19,9 +19,39 @@
 - Exactly-once via Redis idempotency store (check before processing)
 - AI NL→SQL via GitHub Models API (openai/gpt-4o) with ISqlSafetyValidator + audit log
 
-## Learnings
+### Phase 2 — Logs2Obs.Adapters.Local (2026-03-24)
 
-<!-- Append new learnings below. Each entry is something lasting about the project. -->
+**Commit:** TBD (Phase 2+3 commit)
+
+**Build Status:** SUCCESS (0 errors, 78 warnings)
+
+**Files Created (src/Logs2Obs.Adapters.Local/):**
+- 10 adapter implementations: MinioObjectStore, RabbitMqMessageBus, InProcessChannelMessageBus, PostgresMetadataStore, PostgresSchemaRegistry, MeilisearchIndexer, DuckDbQueryEngine, RedisIdempotencyStore, RedisMatViewEngine, LocalSecretStore, QuartzScheduler, OllamaAiService
+- Options: MinioOptions, RabbitMqOptions, PostgresOptions, RedisOptions, MeilisearchOptions, DuckDbOptions, OllamaOptions
+- DI extension: LocalAdaptersServiceCollectionExtensions
+- README.md for adapter documentation
+
+**Files Created (tests/Logs2Obs.Adapters.Local.Tests/):**
+- 6 integration test classes with Testcontainers
+- 4 container fixtures (Minio, PostgreSql, RabbitMq, Redis)
+- xUnit collection definitions
+
+**Files Created (docker/):**
+- docker-compose.yml with all local services
+- 4 Dockerfiles
+- init-scripts/01-schema.sql
+
+**Key Fixes Made During Phase 2 Commit:**
+- Adapter constructors refactored: `MinioObjectStore` and `RedisIdempotencyStore` create their own connections internally (removed `IMinioClient` and `IConnectionMultiplexer` constructor params) — allows `new(Options.Create(...))` pattern in tests
+- `InProcessChannelMessageBus`, `PostgresMetadataStore`: made logger optional (default: NullLogger)
+- Test project: added `GlobalUsings.cs` with `global using Xunit;` to resolve xunit attributes globally
+- Test project: added `TreatWarningsAsErrors=false` (CA1707 underscores in test method names, CA1711 'Collection' suffix — both valid test conventions)
+- `Options.Create()` namespace ambiguity: resolved by placing `using Options = Microsoft.Extensions.Options.Options;` INSIDE the file-scoped namespace body (after the namespace declaration), NOT before it — critical: outer namespace hierarchy lookup takes precedence over compilation-unit-level using aliases
+
+**C# Quirk Documented:**
+In a file-scoped namespace `namespace A.B.C.Tests.Foo;`, identifiers are resolved via outer namespace hierarchy BEFORE checking compilation-unit-level using aliases. To override `A.B.C.Options` namespace resolution when using `Options.Create(...)`, place `using Options = Microsoft.Extensions.Options.Options;` AFTER the `namespace` declaration (inside the namespace body), not before it.
+
+
 
 ### Phase 1 — LightScope.Core Scaffold (2026-03-24)
 

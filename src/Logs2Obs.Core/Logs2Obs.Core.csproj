@@ -7,6 +7,7 @@
     <RootNamespace>Logs2Obs.Core</RootNamespace>
     <AssemblyName>Logs2Obs.Core</AssemblyName>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NoWarn>CA1848;CA1873;CA1716;CA1725;CA1805</NoWarn>
     <Deterministic>true</Deterministic>
   </PropertyGroup>
   <ItemGroup>

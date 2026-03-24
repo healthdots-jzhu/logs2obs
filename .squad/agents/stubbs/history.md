@@ -27,6 +27,33 @@
 
 <!-- Append new learnings below. -->
 
+### 2026-03-24 — Logs2Obs.Adapters.Local.Tests scaffolded (anticipatory, pre-adapters)
+
+**Files created** (all under `tests/Logs2Obs.Adapters.Local.Tests/`):
+- `Logs2Obs.Adapters.Local.Tests.csproj` — xUnit 2, FluentAssertions 7, Testcontainers 3 (PostgreSql, Redis, Minio, RabbitMq), MS.Extensions.Options 10, MS.Extensions.Logging.Abstractions 10
+- `xunit.runner.json` — `parallelizeTestCollections: true`, `maxParallelThreads: 4`
+- `Fixtures/PostgreSqlFixture.cs` — `PostgreSqlBuilder`, exposes `ConnectionString`
+- `Fixtures/RedisFixture.cs` — `RedisBuilder`, exposes `ConnectionString`
+- `Fixtures/MinioFixture.cs` — `MinioBuilder`, exposes `Endpoint`, `AccessKey`, `SecretKey`
+- `Fixtures/RabbitMqFixture.cs` — `RabbitMqBuilder`, exposes `ConnectionString`
+- `Collections/TestCollections.cs` — `[CollectionDefinition]` for all 4 fixture types
+- `ObjectStore/MinioObjectStoreTests.cs` — 6 integration tests using `MinioFixture`
+- `MessageBus/InProcessChannelMessageBusTests.cs` — 4 unit tests, uses `Task.WhenAll`/`CancellationTokenSource` timeout
+- `MetadataStore/PostgresMetadataStoreTests.cs` — 5 integration tests using `PostgreSqlFixture`
+- `Idempotency/RedisIdempotencyStoreTests.cs` — 4 integration tests using `RedisFixture`
+- `QueryEngine/DuckDbQueryEngineTests.cs` — 3 unit tests (DuckDB in-process, `:memory:`)
+- `Secrets/LocalSecretStoreTests.cs` — 3 unit tests (in-memory `ConcurrentDictionary`)
+
+**Test count:** 25 tests total (6 + 4 + 5 + 4 + 3 + 3)
+
+**Testcontainer fixture pattern used:** `IAsyncLifetime` with `[CollectionDefinition]` / `[Collection]` — one container per test collection, shared across tests in the collection. Each test uses `Guid.NewGuid()` keys to avoid cross-test interference.
+
+**Build result (2026-03-24):** BLOCKED — two independent issues:
+1. **Pre-existing CA errors in Logs2Obs.Core (31 errors)** — `TreatWarningsAsErrors=true` + `AnalysisMode=Recommended` cause CA1848, CA1873, CA1725, CA1716, CA1822 to fail the Core build. NOT caused by this scaffold. Affects Core.Tests as well. Bernard needs to fix.
+2. **Logs2Obs.Adapters.Local project missing** — expected; blocked on Dolores completing Phase 2 adapters.
+
+**Namespace assumptions for adapter types** — see `.squad/decisions/inbox/stubbs-adapter-test-assumptions.md`
+
 ### 2026-03-24 — LightScope.Core.Tests scaffolded (anticipatory, pre-Core)
 
 **Files created** (all under `tests/LightScope.Core.Tests/`):

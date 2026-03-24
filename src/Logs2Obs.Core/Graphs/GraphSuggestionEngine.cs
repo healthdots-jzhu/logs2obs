@@ -9,7 +9,7 @@ public class GraphSuggestionEngine
     /// Suggests graph types for the given query result schema using rule-based logic from Section 17.1.
     /// Returns suggestions ordered by confidence (highest first).
     /// </summary>
-    public IReadOnlyList<GraphSuggestion> SuggestFromSchema(QueryResultSchema schema)
+    public static IReadOnlyList<GraphSuggestion> SuggestFromSchema(QueryResultSchema schema)
     {
         List<GraphSuggestion> suggestions = [];
 

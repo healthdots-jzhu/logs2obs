@@ -1,5 +1,9 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Logs2Obs.Adapters.Local/Logs2Obs.Adapters.Local.csproj" />
     <Project Path="src/Logs2Obs.Core/Logs2Obs.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Logs2Obs.Adapters.Local.Tests/Logs2Obs.Adapters.Local.Tests.csproj" />
   </Folder>
 </Solution>

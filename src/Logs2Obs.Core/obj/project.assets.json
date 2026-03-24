@@ -450,11 +450,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\zhuya\\Code\\logs2obs\\src\\Logs2Obs.Core\\Logs2Obs.Core.csproj",
+      "projectUniqueName": "C:\\users\\zhuya\\code\\logs2obs\\src\\Logs2Obs.Core\\Logs2Obs.Core.csproj",
       "projectName": "Logs2Obs.Core",
-      "projectPath": "C:\\Users\\zhuya\\Code\\logs2obs\\src\\Logs2Obs.Core\\Logs2Obs.Core.csproj",
+      "projectPath": "C:\\users\\zhuya\\code\\logs2obs\\src\\Logs2Obs.Core\\Logs2Obs.Core.csproj",
       "packagesPath": "C:\\Users\\zhuya\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\zhuya\\Code\\logs2obs\\src\\Logs2Obs.Core\\obj\\",
+      "outputPath": "C:\\users\\zhuya\\code\\logs2obs\\src\\Logs2Obs.Core\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\zhuya\\AppData\\Roaming\\NuGet\\NuGet.Config"

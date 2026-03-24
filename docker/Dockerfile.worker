@@ -1,0 +1,14 @@
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+COPY ["src/Logs2Obs.Worker/Logs2Obs.Worker.csproj", "src/Logs2Obs.Worker/"]
+COPY ["src/Logs2Obs.Core/Logs2Obs.Core.csproj", "src/Logs2Obs.Core/"]
+COPY ["src/Logs2Obs.Adapters.Local/Logs2Obs.Adapters.Local.csproj", "src/Logs2Obs.Adapters.Local/"]
+RUN dotnet restore "src/Logs2Obs.Worker/Logs2Obs.Worker.csproj"
+COPY . .
+RUN dotnet publish "src/Logs2Obs.Worker/Logs2Obs.Worker.csproj" -c Release -o /app/publish
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+WORKDIR /app
+EXPOSE 8081
+COPY --from=build /app/publish .
+ENTRYPOINT ["dotnet", "Logs2Obs.Worker.dll"]

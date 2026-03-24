@@ -22,3 +22,55 @@
 ## Learnings
 
 <!-- Append new learnings below. -->
+
+### 2026-03-24: Phase 3 — Docker Compose & Local Infrastructure
+
+**Files created:**
+- `docker/docker-compose.yml` — full local stack, name: logs2obs
+- `docker/init-scripts/01-schema.sql` — PostgreSQL schema (metadata tables + schema_registry)
+- `docker/Dockerfile.api` — Logs2Obs.Api, exposes 8080
+- `docker/Dockerfile.worker` — Logs2Obs.Worker, exposes 8081
+- `docker/Dockerfile.puller` — Logs2Obs.Puller, exposes 8082
+- `docker/Dockerfile.queryengine` — Logs2Obs.QueryEngine, exposes 8083
+- `infra/scripts/local-setup.sh` — idempotent bootstrap (MinIO buckets, health checks, Ollama pull)
+- `infra/prometheus.yml` — scrapes api:8080, worker:8081, queryengine:8082 via host.docker.internal
+- `infra/grafana/datasources/prometheus.yml` — Prometheus datasource
+- `infra/grafana/dashboards/logs2obs.json` — 3-panel dashboard (Ingestion Rate, Error Rate, Query Latency P99)
+- `README.md` — root-level quick start
+- `Directory.Build.props` — updated with global Nullable/ImplicitUsings/TreatWarningsAsErrors + cloud SDK ban for Logs2Obs.Core
+- `.gitignore` — updated with .NET, local dev, DuckDB, secrets patterns
+
+**Docker Compose services (core profile — always up):**
+MinIO:9000/9001, RabbitMQ:5672/15672, PostgreSQL:5432, Redis:6379, Meilisearch:7700
+
+**Optional profiles:**
+- `ai` — Ollama:11434 (GPU-capable, heavy)
+- `monitoring` — Prometheus:9090, Grafana:3000
+
+**Port assignments:**
+| Service | Port(s) |
+|---|---|
+| MinIO API | 9000 |
+| MinIO Console | 9001 |
+| RabbitMQ AMQP | 5672 |
+| RabbitMQ Mgmt | 15672 |
+| PostgreSQL | 5432 |
+| Redis | 6379 |
+| Meilisearch | 7700 |
+| Ollama | 11434 |
+| Prometheus | 9090 |
+| Grafana | 3000 |
+| API service | 8080 |
+| Worker service | 8081 |
+| Puller service | 8082 |
+| QueryEngine | 8083 |
+
+**Potential port conflicts to watch:**
+- 5432 (PostgreSQL) — conflicts with any local Postgres installation
+- 6379 (Redis) — conflicts with any local Redis installation
+- 9000 (MinIO) — conflicts with SonarQube if running locally
+- 3000 (Grafana) — conflicts with local Node/React dev servers
+
+**DuckDB note:** Embedded in-process — no Docker container needed; `*.duckdb` and `*.duckdb.wal` added to .gitignore.
+
+**Meilisearch chosen over OpenSearch** for local dev — see felix-infra-decisions.md.

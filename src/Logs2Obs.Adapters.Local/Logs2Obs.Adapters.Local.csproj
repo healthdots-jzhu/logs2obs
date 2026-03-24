@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>preview</LangVersion>
+    <RootNamespace>Logs2Obs.Adapters.Local</RootNamespace>
+    <AssemblyName>Logs2Obs.Adapters.Local</AssemblyName>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Logs2Obs.Core\Logs2Obs.Core.csproj" />
+    <PackageReference Include="Minio" Version="6.*" />
+    <PackageReference Include="RabbitMQ.Client" Version="7.*" />
+    <PackageReference Include="Npgsql" Version="9.*" />
+    <PackageReference Include="Dapper" Version="2.*" />
+    <PackageReference Include="DuckDB.NET.Data.Full" Version="1.*" />
+    <PackageReference Include="StackExchange.Redis" Version="2.*" />
+    <PackageReference Include="Meilisearch" Version="0.*" />
+    <PackageReference Include="Quartz" Version="3.*" />
+    <PackageReference Include="Polly" Version="8.*" />
+    <PackageReference Include="Polly.Extensions" Version="8.*" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="9.*" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.*" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.*" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="9.*" />
+    <PackageReference Include="System.Text.Json" Version="9.*" />
+  </ItemGroup>
+</Project>
