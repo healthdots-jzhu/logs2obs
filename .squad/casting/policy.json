@@ -1,0 +1,10 @@
+{
+  "version": "1.0",
+  "universe": "Westworld",
+  "capacity": 18,
+  "size_fit": "large",
+  "shape_fit": "multi-service-backend",
+  "resonance": "observability-monitoring-ai-analysis",
+  "allow_overflow": true,
+  "overflow_strategy": "diegetic-expansion"
+}
