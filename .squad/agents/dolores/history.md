@@ -80,3 +80,52 @@
 
 **Final build result:** 0 errors, 48 warnings (all CA1848 in Adapters.Local — warnings only, not errors)
 
+### 2025-01-XX: Logs2Obs.Worker Project Completed (Phase 5)
+
+**Created a complete .NET 10 Worker Service that processes log batches from RabbitMQ:**
+
+1. **Project structure:**
+   - `StorageWriterWorker` — Subscribes to `ls-storage-writer`, writes Parquet to MinIO
+   - `SearchIndexerWorker` — Subscribes to `ls-search-indexer`, bulk-indexes into Meilisearch
+   - Both workers: N parallel consumers (WorkerOptions.ConsumerCount=4), bounded Channel<LogEntry> (50k capacity)
+   - Flush triggers: batch size (1000 entries) OR timer (5 seconds)
+
+2. **Parquet.Net 4.x API:**
+   - Use `ParquetSerializer.SerializeAsync<T>()` with a POCO class — simpler than manual schema + columns
+   - Created internal `LogEntryParquetRecord` with 12 fields (Id, SourceId, LogType, Level, Environment, Category, TimestampUnixMs, Message, TraceId, TenantId, SchemaVersion, Tags as JSON string)
+   - Stream position must be reset to 0 after write: `stream.Position = 0`
+
+3. **Polly 8 ResiliencePipeline<T> with async lambdas:**
+   - `ExecuteAsync<TResult>(Func<ResilienceContext, ValueTask<TResult>>, ResilienceContext)` requires a return type
+   - Cannot use `ResiliencePipeline<Task>` — must return a value: use `ResiliencePipeline<object?>`
+   - Lambda: `async _ => { await DoWork(ct); return (object?)null; }`
+   - The underscore `_` ignores the ResilienceContext parameter
+
+4. **OpenTelemetry Metrics in .NET 10:**
+   - `Counter<T>.Add()` and `Histogram<T>.Record()` have ambiguous overloads when passing a single KeyValuePair
+   - Solution: wrap in array literal: `_counter.Add(1, [new("tenant_id", tenantId)])`
+   - Alternative: `_counter.Add(1, new TagList { { "tenant_id", tenantId } })`
+
+5. **CA analyzer suppressions for Worker project:**
+   - `CA1848` (LoggerMessage delegates), `CA1873` (expensive log args), `CA1725` (parameter naming vs base), `CA1305` (culture-specific format), `CA2012` (ValueTask reuse)
+   - Added `<NoWarn>CA1848;CA1873;CA1725;CA1305;CA2012</NoWarn>` — these are performance/style rules that don't affect correctness
+
+6. **IngestLogsHandler implementation completed:**
+   - Maps DTOs to domain via `DtoMapper.ToDomain(dto, tenantId, mode)`
+   - Checks idempotency via `IIdempotencyStore.CheckAndSetAsync($"ingest:{entry.Id}", 24h)` — skips duplicates
+   - Fan-out publish: `Task.WhenAll(PublishAsync("ls-storage-writer"), PublishAsync("ls-search-indexer"))`
+   - Returns `IngestLogsResult(accepted, rejected, batchId)` with Guid.CreateVersion7() batch ID
+
+7. **S3 path partitioning:**
+   - Partition key: `{tenantId}/{yyyy/MM/dd/HH}` (hourly buckets)
+   - Full S3 key: `logs/{tenantId}/{yyyy/MM/dd/HH}/{batchId}.parquet`
+   - `S3PathBuilder.GetPartitionKey()` for buffer keying, `S3PathBuilder.BuildPath()` for final upload
+
+8. **Worker metrics:**
+   - `logs2obs.*` prefix (not `lightscope.*`) per naming decisions
+   - Counters: `ingest.entries`, `ingest.duplicates`, `ingest.rejected`, `parquet.files_written`, `parquet.bytes_written`, `search.indexed`
+   - Histograms: `worker.processing_ms`, `search.index_latency_ms`
+   - All tagged with `tenant_id` for per-tenant observability
+
+**Final build result:** Solution builds cleanly — 0 errors, Worker project complete.
+

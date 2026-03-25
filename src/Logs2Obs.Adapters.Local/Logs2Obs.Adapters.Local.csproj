@@ -17,13 +17,12 @@
     <PackageReference Include="DuckDB.NET.Data.Full" Version="1.*" />
     <PackageReference Include="StackExchange.Redis" Version="2.*" />
     <PackageReference Include="Meilisearch" Version="0.*" />
-    <PackageReference Include="Quartz" Version="3.*" />
+    <PackageReference Include="Quartz" Version="3.13.*" />
     <PackageReference Include="Polly" Version="8.*" />
     <PackageReference Include="Polly.Extensions" Version="8.*" />
     <PackageReference Include="Microsoft.Extensions.Options" Version="9.*" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.*" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.*" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="9.*" />
-    <PackageReference Include="System.Text.Json" Version="9.*" />
   </ItemGroup>
 </Project>

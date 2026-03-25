@@ -546,6 +546,42 @@ Successfully scaffolded and wired `Logs2Obs.Puller.Tests` to Dolores's completed
 
 ---
 
+## Phase 7: Logs2Obs.QueryEngine — Query Routing & Cost Estimation
+
+### Core QueryEngine Implementation (Dolores Phase 7)
+
+**QueryService Architecture:**
+- Implements `IQueryService` with full tier routing (Hot/Warm/Cold) based on retention days
+- `ExecuteSqlQueryHandler` enforces SQL safety validation, applies time-range detection, cost estimation guardrails, and cross-tier fan-out
+- Cross-tier fan-out uses `Task.WhenAll` to execute subqueries in parallel; appends `timestamp` range filters per tier before submission
+- Result synthesis merges JSON array result locations when multiple tiers are queried
+
+**Supporting Services:**
+- `SavedQueryService` persists queries using metadata-store keys prefixed with `savedquery:{tenantId}:{queryId}`
+- `ScheduledReportService` manages scheduled reports with tier configuration (defaults: hot=7 days, warm=90 days)
+- `QueryEngineMetrics` emits cost estimation counters (cost.estimate, cost.confirmed)
+- `SqlParser` extracts ISO timestamps from WHERE clauses for automatic tier selection
+
+**Cost Guardrails:**
+- Cost estimates trigger `PendingCostConfirmation` response when exceeding tenant confirmation threshold
+- Always call `EstimateCostAsync` before any query submission, regardless of tier
+
+### QueryEngine Test Suite (Stubbs Phase 7 & Wire)
+
+**Test Coverage: 32 tests passing**
+- `QueryTierRouterTests` (6): Hot/warm/cold routing, full-text override, no time-range default
+- `SqlSafetyValidatorTests` (7): SELECT-only allowance, forbidden keywords, LIMIT analysis warnings
+- `QueryServiceTests` (6): Tier routing contracts, cost confirmation thresholds
+- `SavedQueryServiceTests` (5): Persistence and retrieval via metadata store
+- `ScheduledReportServiceTests` (4): Report scheduling and execution
+- `QueryEngineMetricsTests` (4): Cost and latency metric emission
+
+**Test Assumptions:**
+- HotRetentionDays = 7, WarmRetentionDays = 90
+- Tests reference only `Logs2Obs.Core` contracts; no circular dependencies
+
+---
+
 ## Governance
 
 - All meaningful changes require team consensus

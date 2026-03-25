@@ -1,8 +1,10 @@
 ---
-updated_at: 2026-03-25T19:15:00Z
+updated_at: 2026-03-25T19:11:49Z
 focus_area: Phase 7 — Logs2Obs.QueryEngine (Query Routing & Cost Estimation)
-status: planning
-active_agents: []
+status: in_progress
+active_agents:
+  - dolores
+  - stubbs
 active_issues:
   - query-engine-tier-routing
   - cost-estimation-models
@@ -22,6 +24,6 @@ active_issues:
 - Phase 6 (Puller): 32 tests
 - **Total: 79 tests, all passing**
 
-Status: Phase 7 ready to kick off.
+Status: Phase 7 in progress — Dolores building QueryEngine core, Stubbs scaffolding test suite.
 
-Updated by Scribe at 2026-03-25T19:15:00Z
+Updated by Scribe at 2026-03-25T19:11:49Z

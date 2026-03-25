@@ -22,4 +22,53 @@
 
 ## Learnings
 
+### 2026-03-24: Phase 4 — Logs2Obs.Api Scaffolding
+
+Successfully scaffolded the Logs2Obs.Api project with ASP.NET Core 10 Minimal APIs + gRPC.
+
+**Key implementations:**
+- Dual authentication (ApiKey + JwtBearer) with ApiKeyAuthHandler using IMemoryCache for 5min caching
+- Per-tenant rate limiting: TokenBucket (1000 tokens, refill 500/sec) for ingestion, SlidingWindow (100/min) for queries
+- gRPC LogIngestionService with 3 streaming modes: unary, client streaming, bidirectional
+- 7 endpoint groups: Logs, Query, Graphs, PullJobs, Alerts, Auth, Replay
+- TenantContextMiddleware extracts tenantId from claims, enforces on authenticated requests
+- PayloadSizeMiddleware rejects >10MB requests to /api/v1/logs
+- GlobalExceptionHandler with FluentValidation support (fully qualified to avoid ambiguity)
+- OpenTelemetry traces + Prometheus metrics export
+- Health endpoints: /health/ready, /health/live
+- Serilog structured logging (requires explicit `using Microsoft.Extensions.Logging;` due to removed implicit using)
+
+**Interface discoveries:**
+- IMetadataStore uses Get/Put/Delete/Query (table, key pattern), NOT Read/Write/List
+- IScheduler has no TriggerJobAsync — manual job triggering requires background queue
+- ISearchIndexer.SearchAsync takes 4 params (tenantId, query, limit, ct), no environment filter
+- ISecretStore methods: GetSecretAsync/SetSecretAsync (not StoreSecretAsync)
+- IQueryEngine.GetResultAsync (not GetExecutionStatusAsync/GetResultsAsync)
+- GetNaturalLanguageQuery.NaturalLanguage property (not Question)
+- LogEntryDto.Timestamp (not TimestampUtc)
+
+**ASP.NET Core 10 API changes:**
+- Rate limiter policy API changed from `.AddTokenBucketLimiter().WithPartitionKey()` to `.AddPolicy(context => RateLimitPartition.Get...())`
+- IMemoryCache.Set requires MemoryCacheEntryOptions, not TimeSpan directly
+- HttpClientInstrumentation extension missing from OpenTelemetry package set (removed for now)
+- WithOpenApi() deprecated (ASPDEPR002) — suppressed via NoWarn
+
+**Code analysis suppressions needed:**
+- CA1305 (culture-specific): Serilog console format provider
+- CA1848 (LoggerMessage delegates): Prefer simplicity for non-hot-path logging
+- CA1861 (static readonly arrays): Health check tags array
+- CA1873 (expensive logging args): Structured logging property evaluation
+- CA2024 (EndOfStream in async): File upload parsing
+
+**Created CoreServiceCollectionExtensions in Logs2Obs.Core/DependencyInjection/**
+- AddLogs2ObsCore() registers MediatR, GraphSuggestionEngine, SqlSafetyValidator, QueryTierRouter
+- TenantQueryInjector, SchemaInferenceEngine are static — no DI registration needed
+
+**Protobuf schema:**
+- `protos/log_ingestion.proto` with LogIngestionService (3 RPC methods)
+- Maps LogEntryProto → LogEntryDto in gRPC service layer
+
+**Build verified:** All projects compile cleanly with TreatWarningsAsErrors enabled.
+
 <!-- Append new learnings below. -->
+

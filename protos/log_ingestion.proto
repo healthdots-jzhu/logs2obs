@@ -1,0 +1,36 @@
+syntax = "proto3";
+option csharp_namespace = "Logs2Obs.Api.Grpc";
+package logs2obs;
+
+service LogIngestionService {
+  rpc IngestLog (IngestLogRequest) returns (IngestLogResponse);
+  rpc IngestLogStream (stream IngestLogRequest) returns (IngestLogResponse);
+  rpc IngestBidirectional (stream IngestLogRequest) returns (stream IngestLogResponse);
+}
+
+message IngestLogRequest {
+  string tenant_id = 1;
+  repeated LogEntryProto entries = 2;
+}
+
+message IngestLogResponse {
+  int32 accepted = 1;
+  int32 rejected = 2;
+  repeated string errors = 3;
+  string request_id = 4;
+}
+
+message LogEntryProto {
+  string source_id = 1;
+  string log_type = 2;
+  string level = 3;
+  string environment = 4;
+  string category = 5;
+  int64 timestamp_unix_ms = 6;
+  string message = 7;
+  string trace_id = 8;
+  string stack_trace = 9;
+  map<string, string> tags = 10;
+  string tenant_id = 11;
+  uint32 schema_version = 12;
+}

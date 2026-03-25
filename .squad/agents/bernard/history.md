@@ -106,3 +106,7 @@ In a file-scoped namespace `namespace A.B.C.Tests.Foo;`, identifiers are resolve
 **Final namespace prefix:** `Logs2Obs` (PascalCase, valid C# identifier)
 
 **Build Result after rename:** SUCCESS (`Logs2Obs.Core net10.0` → `Logs2Obs.Core.dll`, 0 errors)
+
+## Learnings
+
+- Phase 2+3 commit status: committed. Build result: succeeded. Commit hash: 317a3be2afececc4218df3ad9d3c081bcb064ec4.

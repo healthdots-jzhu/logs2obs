@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>preview</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NoWarn>CA1305;CA1848;CA1861;CA1873;CA2024;ASPDEPR002</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Using Remove="Microsoft.Extensions.Logging" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Logs2Obs.Core\Logs2Obs.Core.csproj" />
+    <ProjectReference Include="..\Logs2Obs.Adapters.Local\Logs2Obs.Adapters.Local.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Auth -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.*" />
+    <!-- gRPC -->
+    <PackageReference Include="Grpc.AspNetCore" Version="2.*" />
+    <!-- OpenAPI -->
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.*" />
+    <!-- Telemetry -->
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.*" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.*" />
+    <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.*-*" />
+    <!-- Serilog -->
+    <PackageReference Include="Serilog.AspNetCore" Version="8.*" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <Protobuf Include="..\..\protos\log_ingestion.proto" GrpcServices="Server" />
+  </ItemGroup>
+</Project>
