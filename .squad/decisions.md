@@ -587,3 +587,40 @@ Successfully scaffolded and wired `Logs2Obs.Puller.Tests` to Dolores's completed
 - All meaningful changes require team consensus
 - Document architectural decisions here
 - Keep history focused on work, decisions focused on direction
+
+---
+
+## Phase 11: Logs2Obs.Adapters.Aws — AWS Cloud Adapters
+
+### Core AWS Adapters Implementation
+
+**Project Structure:**
+- Logs2Obs.Adapters.Aws (11 adapter implementations)
+- Logs2Obs.Adapters.Aws.Tests (7 active test classes + 21 skipped tests)
+
+**Adapter Implementations:**
+1. **S3ObjectStore** — Implements IObjectStore using Amazon S3 for log blob storage
+2. **AwsSnsMessageBus** — Implements IMessageBus using SNS for pub/sub messaging
+3. **AwsSqsSubscriber** — Implements IMessageSubscriber using SQS for message consumption
+4. **DynamoMetadataStore** — Implements IMetadataStore using DynamoDB single-table design
+5. **DynamoSchemaRegistry** — Implements ISchemaRegistry using DynamoDB
+6. **AthenaQueryEngine** — Implements IQueryEngine using Athena for SQL queries on S3
+7. **OpenSearchIndexer** — Implements IIndexer for log search
+8. **ElastiCacheIdempotencyStore** — Implements IIdempotencyStore for deduplication
+9. **SecretsManagerSecretStore** — Implements ISecretStore for credential management
+10. **EventBridgeScheduler** — Implements IScheduler for scheduled tasks
+11. **AwsAdaptersServiceCollectionExtensions** — DI configuration
+
+**DynamoDB Design Patterns:**
+- **Single-Table Design:** All entities stored in one DynamoDB table
+- **Composite Key Pattern:** PK format = {table}#{key} (e.g., metadata#tenant-1-schema-id)
+- **Sort Key:** Optional timestamp or entity type for range queries
+
+**Key Test Implementation Detail:**
+- **DynamoMetadataStoreTests.RequestHasKey()** — Uses Contains() (not Equals()) for assertions on composite PK values
+- This accounts for the {table}#{key} pattern where full key = prefix + separator + actual key
+
+**Test Results:**
+- 7 active test classes with 192 total passing tests
+- 21 skipped tests (marked [Skip] for integration-only scenarios)
+- 0 failed tests
