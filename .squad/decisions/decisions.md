@@ -24,4 +24,39 @@
 
 ---
 
-Last updated: 2026-03-26T10:15:02Z by Scribe
+## Phase 9 Decisions
+
+### Felix Phase 9 — CI/CD GitHub Actions Workflows
+
+#### deploy.yml — ECR Push + ECS Deployment
+- **Authentication:** OIDC over Access Keys via `aws-actions/configure-aws-credentials@v4` with `role-to-assume`; eliminates long-lived AWS access keys in GitHub Secrets. Requires IAM trust policy on the AWS role.
+- **Image Tagging:** Dual tags — `:latest` for local testing and `:${github.sha}` for immutable artifact references and rollbacks; ECS can pin to `:sha` in production.
+- **ECS Update Strategy:** Use `aws ecs update-service --force-new-deployment` instead of task definition updates; ECS pulls `:latest` tag automatically, simpler and less error-prone.
+- **Stability Verification:** Include `aws ecs wait services-stable` after service updates to catch rolling update failures early; adds ~2-5 minutes but acceptable for production safety.
+- **Concurrency Control:** `concurrency: { group: deploy-${{ github.ref }}, cancel-in-progress: true }` prevents overlapping deployments and aborts stale deploys.
+- **Job Dependency:** `deploy-ecs` depends on `push-images` to ensure images are pushed before triggering ECS service updates.
+- **Hardcoded Resource Names:** ECS cluster = `logs2obs-cluster`, services = `logs2obs-{api|worker|puller|queryengine}` (matches CDK ComputeStack naming).
+- **Required Secrets:** `AWS_REGION`, `AWS_ROLE_TO_ASSUME`, `ECR_REGISTRY`.
+
+#### release.yml — Tag-Based GitHub Releases
+- **Trigger Pattern:** `v*.*.*` tags (semantic versioning); prevents accidental releases from non-version tags.
+- **Changelog Generation:** Auto-generate from `git log ${PREV_TAG}..HEAD --pretty=format:"- %s"` (assumes human-readable commit messages); fallback includes all commits if no previous tag.
+- **Prerelease Detection:** Auto-detect prerelease by checking for `-rc`, `-beta`, `-alpha` in tag name.
+- **Release Tool:** `softprops/action-gh-release@v2` (actively maintained; `actions/create-release@v1` is deprecated).
+
+#### ci.yml — Code Coverage Enhancement
+- **Coverage Tool:** `--collect:"XPlat Code Coverage"` with `dotnet test` (Coverlet, standard .NET tool; outputs Cobertura XML for SonarQube/Codecov/etc.).
+- **dotnet-coverage Install:** Pre-install `dotnet-coverage` globally before test step for advanced coverage scenarios (merging reports, converting formats).
+- **Coverage Results:** `--results-directory ./coverage` for centralized output; simplifies artifact collection with glob pattern.
+- **Artifact Upload:** Two separate `actions/upload-artifact@v4` steps — one for `.trx` (test results), one for `coverage.cobertura.xml` (coverage); enables selective download by different tools.
+- **Single Test Run:** Replaced separate Test step with single "Test with coverage" step outputting both .trx and coverage; avoids running tests twice.
+
+#### codeql.yml — C# Security Scanning
+- **Schedule:** Weekly on Monday 2 AM UTC (`cron: '0 2 * * 1'`) to catch new vulnerabilities in dependencies.
+- **Language:** `languages: csharp` (single-language project; cleaner than array syntax).
+- **Build Strategy:** `dotnet build logs2obs.slnx -c Release` (explicit build ensures correct .NET 10 / `.slnx` resolution; autobuild may not handle correctly).
+- **Permissions:** Minimal scope — `actions: read, contents: read, security-events: write` (principle of least privilege).
+
+---
+
+Last updated: 2026-03-27T00:00:00Z by Scribe

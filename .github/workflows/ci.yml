@@ -18,14 +18,21 @@ jobs:
         run: dotnet restore logs2obs.slnx
       - name: Build
         run: dotnet build logs2obs.slnx --no-restore -c Release -v q
-      - name: Test
-        run: dotnet test logs2obs.slnx --no-build -c Release --filter "FullyQualifiedName!~Adapters.Local" -v q --logger "trx;LogFileName=results.trx"
+      - name: Install dotnet-coverage
+        run: dotnet tool install --global dotnet-coverage
+      - name: Test with coverage
+        run: dotnet test logs2obs.slnx --no-build -c Release --filter "FullyQualifiedName!~Adapters.Local" -v q --logger "trx;LogFileName=results.trx" --collect:"XPlat Code Coverage" --results-directory ./coverage
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-results
           path: '**/*.trx'
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/**/coverage.cobertura.xml
 
   docker-build:
     runs-on: ubuntu-latest

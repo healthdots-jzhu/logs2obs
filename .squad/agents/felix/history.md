@@ -96,3 +96,24 @@ MinIO:9000/9001, RabbitMQ:5672/15672, PostgreSQL:5432, Redis:6379, Meilisearch:7
   - `docs/runbooks/incident-response.md` — DLQ investigation procedures, OpenSearch recovery, worker crash recovery, high error rate triage decision tree, emergency procedures
 - All files use "logs2obs" branding (not LightScope), include working curl examples, and reference actual source code (GraphSuggestionEngine.cs, VegaLiteSpecBuilder.cs, AuthStack.cs, NetworkStack.cs, ApiKeyAuthHandler.cs)
 - Documentation is operationally focused for engineers on-call with step-by-step runbooks and real-world troubleshooting scenarios
+
+### 2026-03-27: Complete CI/CD GitHub Actions Setup
+- Created `.github/workflows/deploy.yml` — Push Docker images to ECR and deploy to ECS on push to main
+  - Uses OIDC authentication with `aws-actions/configure-aws-credentials@v4` (no access keys)
+  - Builds and pushes all 4 images (api, worker, puller, queryengine) with both `:latest` and `:sha` tags
+  - Updates ECS services with force-new-deployment and waits for stability
+  - Concurrency control to prevent overlapping deployments
+- Created `.github/workflows/release.yml` — Tag-based GitHub Releases with auto-generated changelog
+  - Triggers on `v*.*.*` tags
+  - Generates changelog from git log since previous tag
+  - Auto-detects prerelease status based on `-rc`, `-beta`, `-alpha` suffixes
+- Created `.github/workflows/codeql.yml` — Security scanning with CodeQL for C#
+  - Runs on push to main, PRs to main, and weekly schedule (Mondays 2 AM)
+- Modified `.github/workflows/ci.yml` — Added code coverage collection
+  - Replaced single Test step with "Install dotnet-coverage" + "Test with coverage"
+  - Collects XPlat Code Coverage with Cobertura XML output
+  - Uploads coverage reports as artifacts alongside test results
+- All workflows use latest actions (@v4 for setup-dotnet, checkout, upload-artifact; @v2 for ECR login, @v3 for CodeQL)
+- Deploy workflow requires GitHub secrets: `AWS_REGION`, `AWS_ROLE_TO_ASSUME`, `ECR_REGISTRY`
+- ECS cluster and service names hardcoded: `logs2obs-cluster`, `logs2obs-{api|worker|puller|queryengine}`
+
