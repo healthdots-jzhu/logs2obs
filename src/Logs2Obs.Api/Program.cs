@@ -7,7 +7,6 @@ using Logs2Obs.Api.Middleware;
 using Logs2Obs.Api.Options;
 using Logs2Obs.Api.RateLimiting;
 using Logs2Obs.Core.DependencyInjection;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -39,9 +38,7 @@ builder.Services.AddLocalAdapters(builder.Configuration);
 builder.Services.AddLogs2ObsApi(builder.Configuration);
 builder.Services.AddTenantRateLimiting();
 
-builder.Services.AddHealthChecks()
-    .AddCheck("ready", () => HealthCheckResult.Healthy(), tags: new[] { "ready" })
-    .AddCheck("live", () => HealthCheckResult.Healthy(), tags: new[] { "live" });
+builder.Services.AddHealthChecks();
 
 builder.Services.AddGrpc();
 builder.Services.AddOpenApi();
@@ -64,15 +61,8 @@ app.UseMiddleware<TenantContextMiddleware>();
 
 app.UseRateLimiter();
 
-app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
-{
-    Predicate = check => check.Tags.Contains("ready")
-});
-
-app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
-{
-    Predicate = check => check.Tags.Contains("live")
-});
+app.MapHealthChecks("/health/live");
+app.MapHealthChecks("/health/ready");
 
 app.MapPrometheusScrapingEndpoint("/metrics");
 

@@ -5,15 +5,10 @@ global:
 scrape_configs:
   - job_name: 'logs2obs-api'
     static_configs:
-      - targets: ['host.docker.internal:8080']
-    metrics_path: '/metrics'
-
-  - job_name: 'logs2obs-worker'
-    static_configs:
-      - targets: ['host.docker.internal:8081']
+      - targets: ['logs2obs-api:8080']
     metrics_path: '/metrics'
 
   - job_name: 'logs2obs-queryengine'
     static_configs:
-      - targets: ['host.docker.internal:8082']
+      - targets: ['logs2obs-queryengine:8081']
     metrics_path: '/metrics'

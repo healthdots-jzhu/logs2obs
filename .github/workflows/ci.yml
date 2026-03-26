@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'feature/**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Restore
+        run: dotnet restore logs2obs.slnx
+      - name: Build
+        run: dotnet build logs2obs.slnx --no-restore -c Release -v q
+      - name: Test
+        run: dotnet test logs2obs.slnx --no-build -c Release --filter "FullyQualifiedName!~Adapters.Local" -v q --logger "trx;LogFileName=results.trx"
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: '**/*.trx'
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build API image
+        run: docker build -f docker/Dockerfile.api -t logs2obs-api:${{ github.sha }} .
+      - name: Build Worker image
+        run: docker build -f docker/Dockerfile.worker -t logs2obs-worker:${{ github.sha }} .
+      - name: Build Puller image
+        run: docker build -f docker/Dockerfile.puller -t logs2obs-puller:${{ github.sha }} .
+      - name: Build QueryEngine image
+        run: docker build -f docker/Dockerfile.queryengine -t logs2obs-queryengine:${{ github.sha }} .

@@ -12,6 +12,8 @@ using Logs2Obs.QueryEngine.Replay;
 using Logs2Obs.QueryEngine.Services;
 using Logs2Obs.QueryEngine.Telemetry;
 using MediatR;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using OpenTelemetry.Metrics;
 using Serilog;
 
@@ -41,6 +43,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddHostedService<MatViewRefreshConsumer>();
         services.AddSingleton<IReplayService, ReplayService>();
         services.AddHostedService<ReplayWorker>();
+        services.AddHealthChecks();
 
         var aiProvider = ctx.Configuration["LightScope:AI:Provider"];
         if (string.Equals(aiProvider, "GitHubModels", StringComparison.OrdinalIgnoreCase))
@@ -60,7 +63,22 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddOpenTelemetry()
             .WithMetrics(m => m
                 .AddMeter("logs2obs.queryengine", "logs2obs.alerts")
-                .AddRuntimeInstrumentation());
+                .AddRuntimeInstrumentation()
+                .AddPrometheusExporter());
+    })
+    .ConfigureWebHostDefaults(webBuilder =>
+    {
+        webBuilder.UseUrls("http://+:8081");
+        webBuilder.Configure(app =>
+        {
+            app.UseRouting();
+            app.UseEndpoints(endpoints =>
+            {
+                endpoints.MapHealthChecks("/health/live");
+                endpoints.MapHealthChecks("/health/ready");
+                endpoints.MapPrometheusScrapingEndpoint("/metrics");
+            });
+        });
     })
     .Build();
 

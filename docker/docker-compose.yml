@@ -78,6 +78,115 @@ services:
       timeout: 5s
       retries: 5
 
+  logs2obs-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__Postgres=Host=postgres;Database=logs2obs;Username=logs2obs;Password=logs2obs
+      - MessageBus__RabbitMq__Host=rabbitmq
+      - ObjectStore__MinIO__Endpoint=http://minio:9000
+      - ObjectStore__MinIO__AccessKey=minioadmin
+      - ObjectStore__MinIO__SecretKey=minioadmin
+      - Search__MeiliSearch__Endpoint=http://meilisearch:7700
+      - Metadata__Redis__ConnectionString=redis:6379
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      minio: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  logs2obs-worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    ports:
+      - "5000:5000"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__Postgres=Host=postgres;Database=logs2obs;Username=logs2obs;Password=logs2obs
+      - MessageBus__RabbitMq__Host=rabbitmq
+      - ObjectStore__MinIO__Endpoint=http://minio:9000
+      - ObjectStore__MinIO__AccessKey=minioadmin
+      - ObjectStore__MinIO__SecretKey=minioadmin
+      - Search__MeiliSearch__Endpoint=http://meilisearch:7700
+      - Metadata__Redis__ConnectionString=redis:6379
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      minio: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  logs2obs-puller:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.puller
+    ports:
+      - "5001:5001"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__Postgres=Host=postgres;Database=logs2obs;Username=logs2obs;Password=logs2obs
+      - MessageBus__RabbitMq__Host=rabbitmq
+      - ObjectStore__MinIO__Endpoint=http://minio:9000
+      - ObjectStore__MinIO__AccessKey=minioadmin
+      - ObjectStore__MinIO__SecretKey=minioadmin
+      - Search__MeiliSearch__Endpoint=http://meilisearch:7700
+      - Metadata__Redis__ConnectionString=redis:6379
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      minio: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  logs2obs-queryengine:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.queryengine
+    ports:
+      - "8081:8081"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__Postgres=Host=postgres;Database=logs2obs;Username=logs2obs;Password=logs2obs
+      - MessageBus__RabbitMq__Host=rabbitmq
+      - ObjectStore__MinIO__Endpoint=http://minio:9000
+      - ObjectStore__MinIO__AccessKey=minioadmin
+      - ObjectStore__MinIO__SecretKey=minioadmin
+      - Search__MeiliSearch__Endpoint=http://meilisearch:7700
+      - Metadata__Redis__ConnectionString=redis:6379
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      minio: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      logs2obs-api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   ollama:
     image: ollama/ollama:latest
     ports:

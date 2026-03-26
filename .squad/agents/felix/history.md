@@ -74,3 +74,11 @@ MinIO:9000/9001, RabbitMQ:5672/15672, PostgreSQL:5432, Redis:6379, Meilisearch:7
 **DuckDB note:** Embedded in-process — no Docker container needed; `*.duckdb` and `*.duckdb.wal` added to .gitignore.
 
 **Meilisearch chosen over OpenSearch** for local dev — see felix-infra-decisions.md.
+
+### 2026-03-26: Phase 10 — Health Checks, Compose, CI
+
+- Added ASP.NET Core health endpoints for API, Worker, Puller, and QueryEngine with dedicated ports (8080/5000/5001/8081).
+- Hardened Dockerfiles with multi-stage .NET 10 builds, non-root `app` user, and curl healthchecks.
+- Expanded docker-compose to include all four services with dependency ordering; QueryEngine now waits on API health.
+- Prometheus now scrapes logs2obs-api and logs2obs-queryengine over the Compose network.
+- Added GitHub Actions CI for restore/build/test and Docker image builds.

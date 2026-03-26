@@ -6,6 +6,8 @@ using Logs2Obs.Puller.Options;
 using Logs2Obs.Puller.Scheduling;
 using Logs2Obs.Puller.Services;
 using Logs2Obs.Puller.Telemetry;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using OpenTelemetry.Metrics;
 using Quartz;
 using Serilog;
@@ -36,11 +38,25 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
 
         services.AddHostedService<PullJobScheduler>();
+        services.AddHealthChecks();
 
         services.AddOpenTelemetry()
             .WithMetrics(m => m
                 .AddMeter("logs2obs.puller")
                 .AddRuntimeInstrumentation());
+    })
+    .ConfigureWebHostDefaults(webBuilder =>
+    {
+        webBuilder.UseUrls("http://+:5001");
+        webBuilder.Configure(app =>
+        {
+            app.UseRouting();
+            app.UseEndpoints(endpoints =>
+            {
+                endpoints.MapHealthChecks("/health/live");
+                endpoints.MapHealthChecks("/health/ready");
+            });
+        });
     })
     .Build();
 

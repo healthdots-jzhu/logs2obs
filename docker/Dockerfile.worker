@@ -5,10 +5,13 @@ COPY ["src/Logs2Obs.Core/Logs2Obs.Core.csproj", "src/Logs2Obs.Core/"]
 COPY ["src/Logs2Obs.Adapters.Local/Logs2Obs.Adapters.Local.csproj", "src/Logs2Obs.Adapters.Local/"]
 RUN dotnet restore "src/Logs2Obs.Worker/Logs2Obs.Worker.csproj"
 COPY . .
-RUN dotnet publish "src/Logs2Obs.Worker/Logs2Obs.Worker.csproj" -c Release -o /app/publish
+RUN dotnet publish "src/Logs2Obs.Worker/Logs2Obs.Worker.csproj" -c Release -o /app/publish --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
-EXPOSE 8081
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/publish .
+EXPOSE 5000
+USER app
+HEALTHCHECK CMD curl --fail http://localhost:5000/health/live || exit 1
 ENTRYPOINT ["dotnet", "Logs2Obs.Worker.dll"]

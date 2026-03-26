@@ -11,6 +11,9 @@
     <Using Remove="Microsoft.Extensions.Logging" />
   </ItemGroup>
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\Logs2Obs.Core\Logs2Obs.Core.csproj" />
     <ProjectReference Include="..\Logs2Obs.Adapters.Local\Logs2Obs.Adapters.Local.csproj" />
   </ItemGroup>
@@ -21,6 +24,5 @@
     <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.*-*" />
     <PackageReference Include="Serilog.Extensions.Hosting" Version="8.*" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.*" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.*" />
   </ItemGroup>
 </Project>
