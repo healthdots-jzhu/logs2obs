@@ -87,3 +87,12 @@ MinIO:9000/9001, RabbitMQ:5672/15672, PostgreSQL:5432, Redis:6379, Meilisearch:7
 - Created the `infra/cdk` CDK v2 project (net10.0) with Program.cs and 8 stack files.
 - Implemented S3/Glue storage, SNS/SQS messaging, OpenSearch domain, DynamoDB tables, Redis cache, Cognito auth, VPC/ALB/WAF networking, and ECS/ECR compute.
 - Verified the CDK project builds cleanly with `dotnet build`.
+
+### 2026-03-27: Phase 14 — Documentation Files
+- Created 4 comprehensive documentation files for logs2obs (Phase 14 requirements):
+  - `docs/graph-guide.md` — Complete guide covering 9 graph types, prebuilt templates, Vega-Lite and Chart.js rendering examples
+  - `docs/security.md` — Dual authentication (API keys + JWT/Cognito), tenant isolation at all layers, SQL safety rules, rate limiting, secret management, network topology, compliance notes
+  - `docs/runbooks/scaling.md` — Worker scaling formulas, HPA/ECS auto-scaling configuration, OpenSearch shard scaling, rate limit updates, Grafana metrics, CloudWatch alarms
+  - `docs/runbooks/incident-response.md` — DLQ investigation procedures, OpenSearch recovery, worker crash recovery, high error rate triage decision tree, emergency procedures
+- All files use "logs2obs" branding (not LightScope), include working curl examples, and reference actual source code (GraphSuggestionEngine.cs, VegaLiteSpecBuilder.cs, AuthStack.cs, NetworkStack.cs, ApiKeyAuthHandler.cs)
+- Documentation is operationally focused for engineers on-call with step-by-step runbooks and real-world troubleshooting scenarios

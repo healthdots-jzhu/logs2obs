@@ -70,5 +70,29 @@ Successfully scaffolded the Logs2Obs.Api project with ASP.NET Core 10 Minimal AP
 
 **Build verified:** All projects compile cleanly with TreatWarningsAsErrors enabled.
 
+### 2026-03-24: Phase 14 — Documentation Suite
+
+Successfully created 4 comprehensive documentation files in `docs/` directory.
+
+**Files created:**
+1. **docs/README.md** (7.2 KB) — Project overview, features, quick start, provider compatibility table, architecture summary, example ingest/query
+2. **docs/architecture.md** (16.2 KB) — Full ASCII architecture diagram, hexagonal architecture explanation, service responsibilities, SNS/SQS fanout topology, tier routing table (hot/warm/cold), cloud provider mapping, complete data flow (ingest → query)
+3. **docs/api-reference.md** (20.7 KB) — All 9 endpoint groups with curl examples: Ingest (logs, metrics), Query (SQL, natural language, async), Graphs (render, suggest), Pull Jobs (CRUD), Replay (start, status), Auth (create/delete API keys), Alerts (CRUD), Schema (history). Full request/response schemas, error codes, rate limiting details.
+4. **docs/local-development.md** (16.2 KB) — Prerequisites, 5-step setup (clone → docker-compose → build → run → verify), complete environment variable reference, test commands, provider switching (Local/AWS/Azure/GCP), common workflows, troubleshooting guide (8 issues with solutions), development tips
+
+**Documentation decisions:**
+- Used "logs2obs" (lowercase) consistently for product name; `Logs2Obs` for .NET namespaces
+- Base URL `http://localhost:8080` for all curl examples (matches docker-compose API service port)
+- Omitted endpoints not yet implemented (no schema endpoints found in actual source beyond what's documented)
+- Provider compatibility table notes Azure/GCP adapters as "under development"; AWS/Local production-ready
+- All examples use real request/response schemas from actual DTOs in `src/Logs2Obs.Core/Models/`
+- Included docker-compose service details from `docker/docker-compose.yml` (8 services: API, Worker, Puller, QueryEngine, plus 5 infrastructure services)
+- Troubleshooting section covers 8 common local dev issues: MinIO connection refused, MeiliSearch OOM, DuckDB Parquet path not found, PostgreSQL connection refused, RabbitMQ queue not consuming, rate limit in local dev, slow query execution
+
+**References verified:**
+- All endpoint paths match implementations in `src/Logs2Obs.Api/Endpoints/` (LogsEndpoints, QueryEndpoints, GraphsEndpoints, AuthEndpoints, AlertsEndpoints, PullJobsEndpoints, ReplayEndpoints)
+- Health endpoints: `/health/ready` and `/health/live` (from docker-compose healthcheck config)
+- gRPC endpoints intentionally omitted from API reference (gRPC is for high-throughput agents; REST API docs are user-facing)
+
 <!-- Append new learnings below. -->
 

@@ -25,6 +25,22 @@
 
 <!-- Append new learnings below. -->
 
+### 2026-03-27: Phase 14 Documentation Files Created
+
+**Completed 5 comprehensive documentation files for end-user developers:**
+
+1. **docs/query-guide.md** — Query tier routing (Hot/Warm/Cold/CrossTier), SQL best practices, partition filters, natural language examples, cost estimation flow, DuckDB vs Athena differences.
+2. **docs/schema-evolution.md** — Schema evolution rules, forward/backward compatibility, how to add/deprecate fields, inference mode, Parquet schema merging behavior, API reference.
+3. **docs/idempotency.md** — UUIDv7 structure, Redis idempotency store (SET NX with TTL), three-layer deduplication (Redis/OpenSearch/Parquet), client best practices, duplicate monitoring.
+4. **docs/replay-guide.md** — 5 replay use cases (backfill alerts, re-index, parser fixes, recovery, schema migration), replay flow (S3→Puller→Worker), ReplayOptions reference, cost considerations, monitoring.
+5. **docs/materialized-views.md** — 3 standard matviews (error_rate_per_minute, latency_p99_per_service, log_volume_by_type), Redis storage, refresh cadence, fallback behavior, custom matview registration.
+
+**Key facts recorded:**
+- All docs use "logs2obs" (lowercase) for product name, `Logs2Obs` for .NET namespaces
+- Read actual source files (QueryTierRouter.cs, SchemaInferenceEngine.cs, S3PathBuilder.cs, StandardMatViews.cs) to ensure accuracy
+- Included working examples, API curl commands, troubleshooting sections, and performance characteristics
+- Total: ~63KB of developer-facing documentation
+
 ### 2026-03-26: Phase 11 AWS Adapters Implemented
 
 - Built AWS adapter project with S3, SNS/SQS, DynamoDB, Athena, OpenSearch, ElastiCache, Secrets Manager, and EventBridge.
