@@ -1,7 +1,10 @@
 ---
-updated_at: 2026-03-25T21:11:45Z
+updated_at: 2026-03-26T10:15:02Z
 focus_area: Phase 9 — Logs2Obs.QueryEngine Alerts, MatViews, Replay
-status: Phase 8 complete, Phase 9 next
+status: Phase 9 in progress
+active_agents:
+  - Dolores: Backend services (Alerts, MatViews, Replay)
+  - Stubbs: Test scaffolding
 completed_phases:
   - Phase 4 (API): 21 tests ✅
   - Phase 5 (Worker): 26 tests ✅
@@ -31,9 +34,9 @@ completed_phases:
 
 **Build Status:** 0 errors, 0 warnings (excluding Docker-dependent Adapters.Local.Tests)
 
-**Phase 9 Next:** Alerts, MatViews, Replay
-- Materialized view query scheduling
-- Alert correlation & thresholds
-- Timeline replay visualization
+**Phase 9 Active:**
+- **Dolores:** AlertEvaluationConsumer, AlertNotificationService, AlertEvaluationMetrics, MatViewRefreshConsumer, MatViewRefreshService, ReplayService, ReplayWorker; AlertFiredEvent & ReplayStartedEvent models; StartReplayHandler stub; Program.cs DI wiring.
+- **Stubbs:** QueryEngine.Tests scaffolding (5 active StandardMatViews tests + ~25 skipped stubs).
+- **Targets:** 161 tests passing (Phase 9 adds to existing suite), 0 errors, 0 warnings.
 
-Updated by Scribe at 2026-03-25T21:11:45Z.
+Updated by Scribe at 2026-03-26T10:15:02Z.

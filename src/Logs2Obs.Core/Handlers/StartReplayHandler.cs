@@ -16,7 +16,6 @@ public class StartReplayHandler(
 
     public async Task<ReplayJob> Handle(StartReplayCommand command, CancellationToken ct)
     {
-        // TODO Phase 9: delegate to IReplayService
         _logger.LogInformation("Starting replay for tenant {TenantId} from {From} to {To}",
             command.TenantId, command.From, command.To);
         return await _replayService.StartAsync(command.TenantId, command.From, command.To, command.Options, ct);

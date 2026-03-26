@@ -49,17 +49,17 @@ public static class ReplayEndpoints
     private static async Task<IResult> GetReplayStatus(
         HttpContext context,
         string jobId,
-        IMetadataStore metadataStore,
+        IReplayService replayService,
         CancellationToken cancellationToken)
     {
         var tenantId = context.GetTenantId();
-        var metadata = await metadataStore.GetAsync<Dictionary<string, string>>("replay_jobs", jobId, cancellationToken);
+        var job = await replayService.GetStatusAsync(jobId, cancellationToken);
 
-        if (metadata == null)
+        if (job is null || !string.Equals(job.TenantId, tenantId, StringComparison.Ordinal))
         {
             return Results.NotFound();
         }
 
-        return Results.Ok(metadata);
+        return Results.Ok(job);
     }
 }

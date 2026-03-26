@@ -3,9 +3,12 @@ using Logs2Obs.Core.Abstractions;
 using Logs2Obs.Core.Commands;
 using Logs2Obs.Core.Graphs;
 using Logs2Obs.Core.Query;
+using Logs2Obs.QueryEngine.Alerts;
 using Logs2Obs.QueryEngine.AI;
 using Logs2Obs.QueryEngine.Graphs;
+using Logs2Obs.QueryEngine.MatViews;
 using Logs2Obs.QueryEngine.Options;
+using Logs2Obs.QueryEngine.Replay;
 using Logs2Obs.QueryEngine.Services;
 using Logs2Obs.QueryEngine.Telemetry;
 using MediatR;
@@ -31,6 +34,13 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<GraphSuggestionEngine>();
         services.AddSingleton<GraphRenderService>();
         services.AddScoped<AiQueryAuditLogger>();
+        services.AddSingleton<AlertEvaluationMetrics>();
+        services.AddSingleton<AlertNotificationService>();
+        services.AddHostedService<AlertEvaluationConsumer>();
+        services.AddSingleton<MatViewRefreshService>();
+        services.AddHostedService<MatViewRefreshConsumer>();
+        services.AddSingleton<IReplayService, ReplayService>();
+        services.AddHostedService<ReplayWorker>();
 
         var aiProvider = ctx.Configuration["LightScope:AI:Provider"];
         if (string.Equals(aiProvider, "GitHubModels", StringComparison.OrdinalIgnoreCase))
@@ -49,7 +59,7 @@ var host = Host.CreateDefaultBuilder(args)
 
         services.AddOpenTelemetry()
             .WithMetrics(m => m
-                .AddMeter("logs2obs.queryengine")
+                .AddMeter("logs2obs.queryengine", "logs2obs.alerts")
                 .AddRuntimeInstrumentation());
     })
     .Build();
