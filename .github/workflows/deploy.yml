@@ -1,4 +1,24 @@
-# Requires GitHub OIDC trust policy on the AWS IAM role. See docs/security.md
+# Required GitHub repository secrets:
+#
+#   AWS_REGION          — AWS region, e.g. "us-east-1"
+#
+#   AWS_ROLE_TO_ASSUME  — Full ARN of the IAM role GitHub Actions will assume via OIDC.
+#                         Format: arn:aws:iam::{ACCOUNT_ID}:role/{ROLE_NAME}
+#                         Example: arn:aws:iam::123456789012:role/logs2obs-github-deploy
+#                         The role must have a trust policy granting:
+#                           Principal: { Federated: "arn:aws:iam::{ACCOUNT_ID}:oidc-provider/token.actions.githubusercontent.com" }
+#                           Condition: StringLike "token.actions.githubusercontent.com:sub": "repo:{ORG}/{REPO}:*"
+#                         And permissions: ecr:GetAuthorizationToken, ecr:BatchCheckLayerAvailability,
+#                           ecr:PutImage, ecr:InitiateLayerUpload, ecr:UploadLayerPart,
+#                           ecr:CompleteLayerUpload, ecs:UpdateService, ecs:DescribeServices
+#
+#   ECR_REGISTRY        — Your ECR registry hostname (NOT including the repo name).
+#                         Format: {ACCOUNT_ID}.dkr.ecr.{REGION}.amazonaws.com
+#                         Example: 123456789012.dkr.ecr.us-east-1.amazonaws.com
+#                         Find it in AWS Console → ECR → any repository → URI (strip the repo name)
+#                         Or run: aws ecr describe-registry --query registryId --output text
+#                                 → prepend output + ".dkr.ecr.{region}.amazonaws.com"
+
 name: Deploy to ECS
 
 on:

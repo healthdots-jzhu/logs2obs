@@ -574,6 +574,44 @@ echo -n "SuperSecure123!" | gcloud secrets create opensearch-password --data-fil
 
 ---
 
+### GitHub Actions Secrets
+
+Three secrets must be configured in **GitHub → Settings → Secrets and variables → Actions**:
+
+| Secret | Format | Example | How to find it |
+|---|---|---|---|
+| `AWS_REGION` | AWS region string | `us-east-1` | Your target deployment region |
+| `AWS_ROLE_TO_ASSUME` | Full IAM role ARN | `arn:aws:iam::123456789012:role/logs2obs-github-deploy` | AWS Console → IAM → Roles → your role → ARN |
+| `ECR_REGISTRY` | ECR registry hostname | `123456789012.dkr.ecr.us-east-1.amazonaws.com` | AWS Console → ECR → any repo URI, strip the repo name suffix |
+
+#### Setting up the OIDC trust policy
+
+`AWS_ROLE_TO_ASSUME` uses OIDC (no long-lived keys). The IAM role needs:
+
+**Trust policy:**
+```json
+{
+  "Effect": "Allow",
+  "Principal": {
+    "Federated": "arn:aws:iam::ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"
+  },
+  "Action": "sts:AssumeRoleWithWebIdentity",
+  "Condition": {
+    "StringLike": {
+      "token.actions.githubusercontent.com:sub": "repo:YOUR_ORG/logs2obs:*"
+    }
+  }
+}
+```
+
+**Required permissions:**
+- `ecr:GetAuthorizationToken`, `ecr:BatchCheckLayerAvailability`, `ecr:PutImage`, `ecr:InitiateLayerUpload`, `ecr:UploadLayerPart`, `ecr:CompleteLayerUpload`
+- `ecs:UpdateService`, `ecs:DescribeServices`
+
+The CDK `AuthStack` does not create this role automatically — create it manually in IAM or add it to the CDK `ComputeStack`.
+
+---
+
 ## 6. Network Topology (AWS)
 
 ### VPC Architecture
