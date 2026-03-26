@@ -25,6 +25,13 @@
 
 <!-- Append new learnings below. -->
 
+### 2026-03-26: Phase 11 AWS Adapters Implemented
+
+- Built AWS adapter project with S3, SNS/SQS, DynamoDB, Athena, OpenSearch, ElastiCache, Secrets Manager, and EventBridge.
+- Added composite `AwsMessageBus` to route publish via SNS and subscribe/ack/DLQ via SQS while retaining dedicated adapters.
+- Dynamo metadata store uses single-table keys (`PK=table#key`, `SK=metadata`); schema registry uses `PK=tenantId`, `SK=version`.
+- OpenSearch initialization provisions ISM policy + index template via low-level API before indexing.
+
 ### 2025-01-XX: Logs2Obs.Adapters.Local Project Completed
 
 **Created the complete local adapter implementations for all 11 core infrastructure abstractions:**

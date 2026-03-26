@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <NoWarn>NU1510</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Remove="Microsoft.Extensions.Logging" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.S3" Version="3.*" />
+    <PackageReference Include="AWSSDK.SimpleNotificationService" Version="3.*" />
+    <PackageReference Include="AWSSDK.SQS" Version="3.*" />
+    <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.*" />
+    <PackageReference Include="AWSSDK.Athena" Version="3.*" />
+    <PackageReference Include="AWSSDK.OpenSearchService" Version="3.*" />
+    <PackageReference Include="AWSSDK.SecretsManager" Version="3.*" />
+    <PackageReference Include="AWSSDK.Scheduler" Version="3.*" />
+    <PackageReference Include="AWSSDK.Glue" Version="3.*" />
+    <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="3.*" />
+    <PackageReference Include="OpenSearch.Client" Version="1.*" />
+    <PackageReference Include="StackExchange.Redis" Version="2.*" />
+    <PackageReference Include="Polly" Version="8.*" />
+    <PackageReference Include="Polly.Extensions" Version="8.*" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="9.*" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="9.*" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.*" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.*" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.*" />
+    <PackageReference Include="System.Text.Json" Version="9.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Logs2Obs.Core\Logs2Obs.Core.csproj" />
+  </ItemGroup>
+</Project>

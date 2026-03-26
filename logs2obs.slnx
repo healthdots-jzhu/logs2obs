@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Logs2Obs.Adapters.Local/Logs2Obs.Adapters.Local.csproj" />
+    <Project Path="src/Logs2Obs.Adapters.Aws/Logs2Obs.Adapters.Aws.csproj" />
     <Project Path="src/Logs2Obs.Api/Logs2Obs.Api.csproj" />
     <Project Path="src/Logs2Obs.Core/Logs2Obs.Core.csproj" />
     <Project Path="src/Logs2Obs.Worker/Logs2Obs.Worker.csproj" />
@@ -9,6 +10,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Logs2Obs.Adapters.Local.Tests/Logs2Obs.Adapters.Local.Tests.csproj" />
+    <Project Path="tests/Logs2Obs.Adapters.Aws.Tests/Logs2Obs.Adapters.Aws.Tests.csproj" />
     <Project Path="tests/Logs2Obs.Api.Tests/Logs2Obs.Api.Tests.csproj" />
     <Project Path="tests/Logs2Obs.Worker.Tests/Logs2Obs.Worker.Tests.csproj" />
     <Project Path="tests/Logs2Obs.Puller.Tests/Logs2Obs.Puller.Tests.csproj" />
