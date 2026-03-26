@@ -45,7 +45,7 @@ public class AuthStack : Stack
             StandardAttributes = new StandardAttributes
             {
                 Email = new StandardAttribute { Required = true, Mutable = true },
-                GivenName = new StandardAttribute { Required = false, Mutable = true }
+                Fullname = new StandardAttribute { Required = false, Mutable = true }
             }
         });
 

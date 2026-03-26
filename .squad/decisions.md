@@ -624,3 +624,120 @@ Successfully scaffolded and wired `Logs2Obs.Puller.Tests` to Dolores's completed
 - 7 active test classes with 192 total passing tests
 - 21 skipped tests (marked [Skip] for integration-only scenarios)
 - 0 failed tests
+
+---
+
+### 2026-03-26: Phase 12 Architectural Decisions (CDK Infrastructure)
+
+**By:** Felix (Infrastructure Specialist), coordinated with Coordinator
+
+#### Decision 1: CDK Project Structure
+CDK infrastructure resides in `infra/cdk/` as a dedicated C# project (`Logs2Obs.Cdk.csproj`). Target framework: `net10.0`. Dependencies: **Amazon.CDK.Lib 2.* only**. No separate module-specific CDK packages (e.g., no separate Amazon.CDK.AWS.S3). All AWS construct types imported from Amazon.CDK.Lib.
+
+**Rationale:** Unified dependency management, simplified versioning, reduces NuGet bloat. All constructs available in the main CDK package.
+
+#### Decision 2: Compiler Analysis Suppressions
+- **CA1711 (avoid names ending with Identifier):** Suppressed. CDK convention mandates all stack classes end with `Stack` suffix (e.g., `StorageStack`, `NetworkStack`). This is idiomatic; deviation breaks CDK patterns.
+- **CA1861 (avoid inline arrays):** Suppressed. CDK C# construct initialization idiomatically uses inline array initializers in property assignments (e.g., `Tags = new[] { new Tag("env", "prod") }`). This is standard practice in CDK C#.
+
+Added `<NoWarn>CA1711;CA1861</NoWarn>` to Logs2Obs.Cdk.csproj.
+
+#### Decision 3: Certificate Management
+Use `Certificate.FromCertificateArn()` with a context key lookup. Certificate ARN is injected via CDK context at synthesis time:
+```csharp
+var certificateArn = this.Node.TryGetContext("certificateArn") as string ?? throw new InvalidOperationException("certificateArn context key not provided");
+var cert = Certificate.FromCertificateArn(this, "ListenerCert", certificateArn);
+```
+**Rationale:** Keeps infrastructure code decoupled from hardcoded values. ARN sourced externally (cdk.json context or CLI --context override). Environment-agnostic stack definition.
+
+#### Decision 4: NetworkStack L1/L2 Construct Mixture
+`NetworkStack` uses **L1 constructs** (`CfnVpc`, `CfnSubnet`, `CfnInternetGateway`, `CfnRouteTable`, `CfnNatGateway`, etc.) for maximum control over networking topology (multi-AZ, public/private subnets, NAT gateway placement). L2 constructs (`Vpc`) hide these details; L1 provides explicit control needed for production networking.
+
+Once `NetworkStack` synthesizes resources, the VPC and subnet IDs are exported. Other stacks consume via `VpcAttributes` passed to L2 constructs (e.g., `Ecs.Cluster` with custom `VpcAttributes`).
+
+**Rationale:** L1 for low-level control; L2 for consumers. Clear separation: NetworkStack owns all networking L1s; Compute/DB consumers use L2s bound to exported VpcAttributes.
+
+#### Decision 5: IListenerCertificate Interface
+`ListenerApplicationRule` (ALB listener) requires an `IListenerCertificate`. Direct `Certificate` instances do **not** implement `IListenerCertificate`. Use `ListenerCertificate.FromCertificateManager()` wrapper:
+```csharp
+var cert = Certificate.FromCertificateArn(...);
+var listenerCert = ListenerCertificate.FromCertificateManager(cert);
+listener.AddCertificates("Certs", new[] { listenerCert });
+```
+**Rationale:** CDK type system segregates public certificate presentation (`IListenerCertificate`) from certificate objects. Wrapping is explicit and type-safe.
+
+#### Decision 6: DatabaseStack Specification Patterns
+`PointInTimeRecovery` property is deprecated in newer CDK versions. Use `PointInTimeRecoverySpecification` instead:
+```csharp
+new Table(this, "MyTable", new TableProps { 
+    PointInTimeRecoverySpecification = new PointInTimeRecoverySpecification { Enabled = true }
+});
+```
+All 8 DynamoDB tables in `DatabaseStack` use `PointInTimeRecoverySpecification { Enabled = true }` for compliance and disaster recovery.
+
+#### Decision 7: Cognito StandardAttributes
+`UserPool` `StandardAttributes` property uses `GivenName` (first name) and `FamilyName` (last name), **not** `FullName`. `FullName` is not a valid standard attribute in Cognito User Pools.
+
+**Rationale:** Cognito attribute catalog defines `GivenName` and `FamilyName` as standard; `FullName` is derived or custom. Using standard names ensures attribute mappings work correctly across integrations (OIDC, SAML).
+
+#### Decision 8: Stack Decomposition (8 Stacks)
+All AWS infrastructure decomposed into 8 focused stacks:
+1. **StorageStack** — S3 raw + Athena results buckets, Glue database/table
+2. **MessagingStack** — 2 SNS topics + 8 SQS queues + 8 DLQs with filter policies
+3. **SearchStack** — OpenSearch domain (t3.small instance, gp3 100GB, encryption)
+4. **DatabaseStack** — 8 DynamoDB tables (PAY_PER_REQUEST billing, PITR enabled)
+5. **CacheStack** — ElastiCache Redis (cache.t4g.micro instance, CfnReplicationGroup)
+6. **AuthStack** — Cognito User Pool + pre-token trigger Lambda (tenantId injection)
+7. **NetworkStack** — VPC + IGW + NAT + ALB + WAF (L1 constructs, 3 AZs)
+8. **ComputeStack** — ECR repos (1 per service) + ECS Fargate cluster + 4 task definitions
+
+**Rationale:** Each stack is independently deployable and testable. Clear responsibility boundaries reduce cognitive load. Shared resources (VPC, subnets) exported and consumed via stack props or context.
+
+#### Decision 9: SQS + DLQ Filter Policies
+Each of 8 queues has an associated DLQ. Filter policies map SNS topic messages to queues based on message type. Example:
+```csharp
+queue.AddToResourcePolicy(new PolicyStatement {
+    Effect = Effect.ALLOW,
+    Principals = new[] { new ServicePrincipal("sns.amazonaws.com") },
+    Actions = new[] { "sqs:SendMessage" },
+    Conditions = new Dictionary<string, object> {
+        { "aws:SourceArn", topic.TopicArn }
+    }
+});
+topic.AddSubscription(new SqsSubscription(queue, new SqsSubscriptionProps {
+    RawMessageDelivery = true,
+    FilterPolicy = new SubscriptionFilter { /* ... */ }
+}));
+```
+Each DLQ subscribed to its queue's topic with **no** filter (receives all failed messages from parent queue).
+
+**Rationale:** Automatic retry/replay logic; dead messages isolated for investigation.
+
+#### Decision 10: Task Definition Secrets Injection
+Secrets (database passwords, API keys, etc.) injected into ECS task definitions via AWS Secrets Manager reference:
+```csharp
+containerDefinition.AddEnvironment("DB_PASSWORD", SecretValue.SecretsManager(...));
+```
+No secrets hardcoded in task definition JSON or environment variables. IAM role attached to task execution role grants read permissions to Secrets Manager.
+
+**Rationale:** Compliance (no secret sprawl), auditability (Secrets Manager logs access), rotation support (change secret without redeploy).
+
+#### Decision 11: WAF Web ACL Rules
+WAF Web ACL attached to ALB with:
+- Rate-limiting rule (2000 requests/5 min per IP)
+- SQL injection protection (AWS Managed Rule)
+- XSS protection (AWS Managed Rule)
+- Geo-blocking (optional; configured via context)
+
+**Rationale:** Standard DDoS/injection mitigation for public-facing ALB. Managed rules reduce operational burden.
+
+#### Decision 12: Compiler Fixes Applied
+Coordinator fixed 6 compiler errors after Felix's initial pass:
+1. CA1711 noWarn added to csproj
+2. CA1861 noWarn added to csproj
+3. `StandardAttributes.FullName` → `StandardAttributes.GivenName`
+4. `ListenerCertificate.FromCertificateManager()` wrapper for IListenerCertificate compliance
+5. `PointInTimeRecovery` → `PointInTimeRecoverySpecification`
+6. SQS subscription filter policy syntax corrected
+
+All errors resolved; stacks compile cleanly to synthesizable CloudFormation templates.

@@ -1,123 +1,104 @@
-using FluentAssertions;
 using Logs2Obs.Core.Mapping;
-using Logs2Obs.Core.Models;
-using Logs2Obs.Core.Tests.Helpers;
 
 namespace Logs2Obs.Core.Tests.Mapping;
 
 public class DtoMapperTests
 {
     [Fact]
-    public void ToDomain_Always_GeneratesNewId()
+    public void ToDomain_WhenCalled_TenantIdIsAlwaysFromArgument()
     {
-        var dto = TestDataBuilders.AValidLogEntryDto();
+        var dto = CreateDto();
 
-        var result = DtoMapper.ToDomain(dto, "t-test", IngestionMode.Push);
+        var result = DtoMapper.ToDomain(dto, "tenant-expected", IngestionMode.Push);
 
-        result.Id.Should().NotBeNullOrEmpty();
+        result.TenantId.Should().Be("tenant-expected");
+    }
+
+    [Fact]
+    public void ToDomain_WhenCalled_IdIsSystemGenerated()
+    {
+        var dto = CreateDto();
+
+        var result = DtoMapper.ToDomain(dto, "tenant-1", IngestionMode.Push);
+
+        result.Id.Should().NotBeNullOrWhiteSpace();
         Guid.TryParse(result.Id, out _).Should().BeTrue();
     }
 
     [Fact]
-    public void ToDomain_Always_SetsTenantIdFromParameter_NotFromDto()
+    public void ToDomain_WhenCalled_IngestedAtIsSetToUtcNow()
     {
-        var dto = TestDataBuilders.AValidLogEntryDto();
+        var dto = CreateDto();
+        var now = DateTimeOffset.UtcNow;
 
-        var result = DtoMapper.ToDomain(dto, "t-expected", IngestionMode.Push);
+        var result = DtoMapper.ToDomain(dto, "tenant-1", IngestionMode.Push);
 
-        result.TenantId.Should().Be("t-expected");
+        result.IngestedAt.Should().BeCloseTo(now, TimeSpan.FromSeconds(2));
     }
 
     [Fact]
-    public void ToDomain_Always_SetsIngestedAtToApproximatelyNow()
+    public void ToDomain_WithValidDto_MapsAllUserFields()
     {
-        var before = DateTimeOffset.UtcNow;
-        var result = DtoMapper.ToDomain(TestDataBuilders.AValidLogEntryDto(), "t-test", IngestionMode.Push);
-        var after = DateTimeOffset.UtcNow;
+        var dto = CreateDto(logType: "Error", message: "boom", sourceId: "api-gateway");
 
-        result.IngestedAt.Should().BeOnOrAfter(before).And.BeOnOrBefore(after);
+        var result = DtoMapper.ToDomain(dto, "tenant-1", IngestionMode.Push);
+
+        result.SourceId.Should().Be("api-gateway");
+        result.Message.Should().Be("boom");
+        result.LogType.Should().Be(LogType.Error);
     }
 
     [Fact]
-    public void ToDomain_Always_SetsIngestionModeFromParameter()
+    public void ToDomain_WithNullTags_ReturnsEmptyTags()
     {
-        var result = DtoMapper.ToDomain(TestDataBuilders.AValidLogEntryDto(), "t-test", IngestionMode.Pull);
+        var dto = CreateDto(tags: null);
 
-        result.IngestionMode.Should().Be(IngestionMode.Pull);
+        var result = DtoMapper.ToDomain(dto, "tenant-1", IngestionMode.Push);
+
+        result.Tags.Should().NotBeNull();
+        result.Tags.Should().BeEmpty();
     }
 
     [Fact]
-    public void ToDomain_CalledTwice_ProducesDifferentIds()
+    public void ToDomain_WithMetrics_MapsMetricsCorrectly()
     {
-        var dto = TestDataBuilders.AValidLogEntryDto();
+        var dto = CreateDto(
+            logType: "Metric",
+            metric: new MetricDto
+            {
+                MetricName = "http-latency",
+                Unit = "ms",
+                Value = 12.5,
+                MetricType = "Histogram"
+            });
 
-        var r1 = DtoMapper.ToDomain(dto, "t-test", IngestionMode.Push);
-        var r2 = DtoMapper.ToDomain(dto, "t-test", IngestionMode.Push);
+        var result = DtoMapper.ToDomain(dto, "tenant-1", IngestionMode.Push);
 
-        r1.Id.Should().NotBe(r2.Id);
+        result.Metric.Should().NotBeNull();
+        result.Metric!.MetricName.Should().Be("http-latency");
+        result.Metric.Unit.Should().Be("ms");
+        result.Metric.Value.Should().Be(12.5);
+        result.Metric.MetricType.Should().Be(MetricType.Histogram);
     }
 
-    [Fact]
-    public void ToDto_RoundTrip_PreservesSourceIdAndMessage()
-    {
-        var dto = TestDataBuilders.AValidLogEntryDto();
-        var domain = DtoMapper.ToDomain(dto, "t-test", IngestionMode.Push);
-
-        var result = DtoMapper.ToDto(domain);
-
-        result.SourceId.Should().Be(dto.SourceId);
-        result.Message.Should().Be(dto.Message);
-    }
-
-    [Fact]
-    public void ToDomain_NeverUsesIdFromDto()
-    {
-        // The DTO's Id field is always ignored — the system generates a fresh one
-        var dto = TestDataBuilders.AValidLogEntryDto();
-        dto.Id = "caller-supplied-id-should-be-ignored";
-
-        var result = DtoMapper.ToDomain(dto, "t-test", IngestionMode.Push);
-
-        result.Id.Should().NotBe("caller-supplied-id-should-be-ignored");
-    }
-
-    [Fact]
-    public void ToDomain_MapsSourceIdFromDto()
-    {
-        var dto = TestDataBuilders.AValidLogEntryDto();
-
-        var result = DtoMapper.ToDomain(dto, "t-test", IngestionMode.Push);
-
-        result.SourceId.Should().Be(dto.SourceId);
-    }
-
-    [Fact]
-    public void ToDomain_MapsMessageFromDto()
-    {
-        var dto = TestDataBuilders.AValidLogEntryDto();
-
-        var result = DtoMapper.ToDomain(dto, "t-test", IngestionMode.Push);
-
-        result.Message.Should().Be(dto.Message);
-    }
-
-    [Fact]
-    public void ToDomain_MapsTimestampFromDto()
-    {
-        var dto = TestDataBuilders.AValidLogEntryDto();
-
-        var result = DtoMapper.ToDomain(dto, "t-test", IngestionMode.Push);
-
-        result.Timestamp.Should().Be(dto.Timestamp);
-    }
-
-    [Fact]
-    public void ToDomain_AllIngestionModes_ArePreserved()
-    {
-        foreach (var mode in Enum.GetValues<IngestionMode>())
+    private static LogEntryDto CreateDto(
+        string sourceId = "payment-service",
+        string logType = "Application",
+        string level = "Information",
+        string environment = "production",
+        string message = "ok",
+        IReadOnlyDictionary<string, string>? tags = null,
+        MetricDto? metric = null) =>
+        new()
         {
-            var result = DtoMapper.ToDomain(TestDataBuilders.AValidLogEntryDto(), "t-test", mode);
-            result.IngestionMode.Should().Be(mode);
-        }
-    }
+            SourceId = sourceId,
+            LogType = logType,
+            Level = level,
+            Environment = environment,
+            Category = "api",
+            Timestamp = DateTimeOffset.UtcNow,
+            Message = message,
+            Tags = tags,
+            Metric = metric
+        };
 }

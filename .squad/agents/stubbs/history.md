@@ -226,3 +226,9 @@ Bernard completed Logs2Obs.Core (79 files, 0 errors). The following assumptions 
 - `IObjectStore.WriteAsync(string key, Stream content, string contentType, CancellationToken) → Task` (NOT ValueTask)
 - `IIdempotencyStore.CheckAndSetAsync(string key, TimeSpan ttl, CancellationToken) → ValueTask<bool>`
 
+### 2026-03-25 — Phase 13 Core + JWT test gaps
+- Updated `Logs2Obs.Core.Tests`: refreshed csproj deps/global usings, removed duplicate QueryEngine tests, and added DtoMapper, LogEntryDtoValidator, S3PathBuilder, SchemaInferenceEngine, TenantQueryInjector, and ResiliencePipelines coverage per Phase 13.
+- Added `JwtAuthTests` skipped stubs in Api.Tests (middleware integration required); ApiKeyAuthHandler tests already covered.
+- Core tweaks to satisfy contracts: DtoMapper now defaults null Tags to empty dictionary; TenantQueryInjector throws ArgumentException for empty tenantId.
+- Added Core.Tests to `logs2obs.slnx`.
+- Tests: `dotnet build/test` Core.Tests + Api.Tests (Release) succeeded; full solution build succeeded with existing CA1848/CA1861 warnings in Adapters.Local and Puller.

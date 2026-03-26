@@ -24,7 +24,10 @@ public static class TenantQueryInjector
     /// <exception cref="QueryGuardException">Thrown if the tenant ID contains unsafe characters.</exception>
     public static void ValidateTenantId(string tenantId)
     {
-        if (string.IsNullOrWhiteSpace(tenantId) || UnsafeChars.IsMatch(tenantId))
+        if (string.IsNullOrWhiteSpace(tenantId))
+            throw new ArgumentException("TenantId cannot be empty.", nameof(tenantId));
+
+        if (UnsafeChars.IsMatch(tenantId))
             throw new QueryGuardException($"TenantId '{tenantId}' contains unsafe characters.");
     }
 }

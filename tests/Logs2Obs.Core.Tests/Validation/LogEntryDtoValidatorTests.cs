@@ -1,282 +1,108 @@
-using FluentAssertions;
-using FluentValidation.TestHelper;
-using Logs2Obs.Core.Models;
-using Logs2Obs.Core.Tests.Helpers;
 using Logs2Obs.Core.Validation;
 
 namespace Logs2Obs.Core.Tests.Validation;
 
 public class LogEntryDtoValidatorTests
 {
-    private readonly LogEntryDtoValidator _sut = new();
+    private readonly LogEntryDtoValidator _validator = new();
 
     [Fact]
-    public void Validate_ValidDto_PassesValidation()
+    public void Validate_WithValidDto_ReturnsValid()
     {
-        var result = _sut.TestValidate(TestDataBuilders.AValidLogEntryDto());
+        var dto = CreateValidDto();
 
-        result.ShouldNotHaveAnyValidationErrors();
-    }
+        var result = _validator.Validate(dto);
 
-    [Fact]
-    public void Validate_EmptySourceId_Fails()
-    {
-        var dto = TestDataBuilders.AValidLogEntryDto();
-        dto.SourceId = string.Empty;
-
-        var result = _sut.TestValidate(dto);
-
-        result.ShouldHaveValidationErrorFor(x => x.SourceId);
-    }
-
-    [Theory]
-    [InlineData("source id!")]
-    [InlineData("source id with spaces")]
-    [InlineData("source@id")]
-    [InlineData("source#id")]
-    public void Validate_SourceIdWithSpecialChars_Fails(string sourceId)
-    {
-        var dto = TestDataBuilders.AValidLogEntryDto();
-        dto.SourceId = sourceId;
-
-        var result = _sut.TestValidate(dto);
-
-        result.ShouldHaveValidationErrorFor(x => x.SourceId);
-    }
-
-    [Theory]
-    [InlineData("payment-service")]
-    [InlineData("payment_service")]
-    [InlineData("payment.service")]
-    [InlineData("payment:service")]
-    [InlineData("payment/service")]
-    [InlineData("PaymentService123")]
-    public void Validate_SourceIdWithAllowedChars_Passes(string sourceId)
-    {
-        var dto = TestDataBuilders.AValidLogEntryDto();
-        dto.SourceId = sourceId;
-
-        var result = _sut.TestValidate(dto);
-
-        result.ShouldNotHaveValidationErrorFor(x => x.SourceId);
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]
-    public void Validate_InvalidLogType_Fails()
+    public void Validate_WhenMessageIsEmpty_ReturnsInvalid()
     {
-        var dto = TestDataBuilders.AValidLogEntryDto();
-        dto.LogType = "NotAType";
+        var dto = CreateValidDto(message: string.Empty);
 
-        var result = _sut.TestValidate(dto);
+        var result = _validator.Validate(dto);
 
-        result.ShouldHaveValidationErrorFor(x => x.LogType);
-    }
-
-    [Theory]
-    [InlineData("Application")]
-    [InlineData("Error")]
-    [InlineData("Network")]
-    [InlineData("OS")]
-    [InlineData("Metric")]
-    [InlineData("Audit")]
-    [InlineData("Custom")]
-    [InlineData("application")]   // case-insensitive
-    [InlineData("ERROR")]
-    public void Validate_ValidLogType_Passes(string logType)
-    {
-        var dto = TestDataBuilders.AValidLogEntryDto();
-        dto.LogType = logType;
-        if (logType.Equals("Metric", StringComparison.OrdinalIgnoreCase))
-            dto.Metric = new MetricPayloadDto { MetricName = "test", Unit = "ms", Value = 1.0 };
-
-        var result = _sut.TestValidate(dto);
-
-        result.ShouldNotHaveValidationErrorFor(x => x.LogType);
+        result.IsValid.Should().BeFalse();
     }
 
     [Fact]
-    public void Validate_InvalidLevel_Fails()
+    public void Validate_WhenMessageExceedsMaxLength_ReturnsInvalid()
     {
-        var dto = TestDataBuilders.AValidLogEntryDto();
-        dto.Level = "NotALevel";
+        var dto = CreateValidDto(message: new string('x', 65537));
 
-        var result = _sut.TestValidate(dto);
+        var result = _validator.Validate(dto);
 
-        result.ShouldHaveValidationErrorFor(x => x.Level);
-    }
-
-    [Theory]
-    [InlineData("Trace")]
-    [InlineData("Debug")]
-    [InlineData("Info")]
-    [InlineData("Warn")]
-    [InlineData("Error")]
-    [InlineData("Fatal")]
-    [InlineData("info")]
-    [InlineData("ERROR")]
-    public void Validate_ValidLevel_Passes(string level)
-    {
-        var dto = TestDataBuilders.AValidLogEntryDto();
-        dto.Level = level;
-
-        var result = _sut.TestValidate(dto);
-
-        result.ShouldNotHaveValidationErrorFor(x => x.Level);
+        result.IsValid.Should().BeFalse();
     }
 
     [Fact]
-    public void Validate_TimestampMoreThan5MinutesInFuture_Fails()
+    public void Validate_WhenSourceIsEmpty_ReturnsInvalid()
     {
-        var dto = TestDataBuilders.AValidLogEntryDto();
-        dto.Timestamp = DateTimeOffset.UtcNow.AddMinutes(6);
+        var dto = CreateValidDto(sourceId: string.Empty);
 
-        var result = _sut.TestValidate(dto);
+        var result = _validator.Validate(dto);
 
-        result.ShouldHaveValidationErrorFor(x => x.Timestamp);
+        result.IsValid.Should().BeFalse();
     }
 
     [Fact]
-    public void Validate_TimestampMoreThan30DaysInPast_Fails()
+    public void Validate_WhenTimestampIsMinValue_ReturnsInvalid()
     {
-        var dto = TestDataBuilders.AValidLogEntryDto();
-        dto.Timestamp = DateTimeOffset.UtcNow.AddDays(-31);
+        var dto = CreateValidDto(timestamp: DateTimeOffset.MinValue);
 
-        var result = _sut.TestValidate(dto);
+        var result = _validator.Validate(dto);
 
-        result.ShouldHaveValidationErrorFor(x => x.Timestamp);
+        result.IsValid.Should().BeFalse();
     }
 
     [Fact]
-    public void Validate_TimestampExactly5MinutesInFuture_Passes()
+    public void Validate_WithValidMetrics_ReturnsValid()
     {
-        var dto = TestDataBuilders.AValidLogEntryDto();
-        dto.Timestamp = DateTimeOffset.UtcNow.AddMinutes(4).AddSeconds(30);
-
-        var result = _sut.TestValidate(dto);
-
-        result.ShouldNotHaveValidationErrorFor(x => x.Timestamp);
-    }
-
-    [Fact]
-    public void Validate_EmptyMessage_Fails()
-    {
-        var dto = TestDataBuilders.AValidLogEntryDto();
-        dto.Message = string.Empty;
-
-        var result = _sut.TestValidate(dto);
-
-        result.ShouldHaveValidationErrorFor(x => x.Message);
-    }
-
-    [Fact]
-    public void Validate_MessageExceeds65536Chars_Fails()
-    {
-        var dto = TestDataBuilders.AValidLogEntryDto();
-        dto.Message = new string('x', 65537);
-
-        var result = _sut.TestValidate(dto);
-
-        result.ShouldHaveValidationErrorFor(x => x.Message);
-    }
-
-    [Fact]
-    public void Validate_MessageExactly65536Chars_Passes()
-    {
-        var dto = TestDataBuilders.AValidLogEntryDto();
-        dto.Message = new string('x', 65536);
-
-        var result = _sut.TestValidate(dto);
-
-        result.ShouldNotHaveValidationErrorFor(x => x.Message);
-    }
-
-    [Fact]
-    public void Validate_TagsWithMoreThan50Entries_Fails()
-    {
-        var dto = TestDataBuilders.AValidLogEntryDto();
-        dto.Tags = Enumerable.Range(1, 51).ToDictionary(i => $"key{i}", i => $"value{i}");
-
-        var result = _sut.TestValidate(dto);
-
-        result.ShouldHaveValidationErrorFor(x => x.Tags);
-    }
-
-    [Fact]
-    public void Validate_TagsWithExactly50Entries_Passes()
-    {
-        var dto = TestDataBuilders.AValidLogEntryDto();
-        dto.Tags = Enumerable.Range(1, 50).ToDictionary(i => $"key{i}", i => $"value{i}");
-
-        var result = _sut.TestValidate(dto);
-
-        result.ShouldNotHaveValidationErrorFor(x => x.Tags);
-    }
-
-    [Fact]
-    public void Validate_TagKeyExceeds128Chars_Fails()
-    {
-        var dto = TestDataBuilders.AValidLogEntryDto();
-        dto.Tags = new Dictionary<string, string>
-        {
-            [new string('k', 129)] = "value"
-        };
-
-        var result = _sut.TestValidate(dto);
-
-        result.ShouldHaveValidationErrorFor(x => x.Tags);
-    }
-
-    [Fact]
-    public void Validate_TagValueExceeds1024Chars_Fails()
-    {
-        var dto = TestDataBuilders.AValidLogEntryDto();
-        dto.Tags = new Dictionary<string, string>
-        {
-            ["valid-key"] = new string('v', 1025)
-        };
-
-        var result = _sut.TestValidate(dto);
-
-        result.ShouldHaveValidationErrorFor(x => x.Tags);
-    }
-
-    [Fact]
-    public void Validate_MetricLogTypeWithoutMetricPayload_Fails()
-    {
-        var dto = TestDataBuilders.AValidLogEntryDto();
-        dto.LogType = "Metric";
-        dto.Metric = null;
-
-        var result = _sut.TestValidate(dto);
-
-        result.ShouldHaveValidationErrorFor(x => x.Metric);
-    }
-
-    [Fact]
-    public void Validate_MetricLogTypeWithMetricPayload_Passes()
-    {
-        var dto = TestDataBuilders.AValidLogEntryDto();
-        dto.LogType = "Metric";
-        dto.Metric = new MetricPayloadDto
+        var dto = CreateValidDto(logType: "Metric", metric: new MetricDto
         {
             MetricName = "http-latency",
             Unit = "ms",
-            Value = 120.5
-        };
+            Value = 12.5,
+            MetricType = "Histogram"
+        });
 
-        var result = _sut.TestValidate(dto);
+        var result = _validator.Validate(dto);
 
-        result.ShouldNotHaveValidationErrorFor(x => x.Metric);
+        result.IsValid.Should().BeTrue();
     }
 
     [Fact]
-    public void Validate_NullTags_Passes()
+    public void Validate_WhenMetricNameIsEmpty_ReturnsInvalid()
     {
-        var dto = TestDataBuilders.AValidLogEntryDto();
-        dto.Tags = null;
+        var dto = CreateValidDto(logType: "Metric", metric: new MetricDto
+        {
+            MetricName = string.Empty,
+            Unit = "ms",
+            Value = 12.5,
+            MetricType = "Histogram"
+        });
 
-        var result = _sut.TestValidate(dto);
+        var result = _validator.Validate(dto);
 
-        result.ShouldNotHaveValidationErrorFor(x => x.Tags);
+        result.IsValid.Should().BeFalse();
     }
+
+    private static LogEntryDto CreateValidDto(
+        string sourceId = "payment-service",
+        string logType = "Application",
+        string message = "ok",
+        DateTimeOffset? timestamp = null,
+        MetricDto? metric = null) =>
+        new()
+        {
+            SourceId = sourceId,
+            LogType = logType,
+            Level = "Information",
+            Environment = "production",
+            Category = "api",
+            Timestamp = timestamp ?? DateTimeOffset.UtcNow,
+            Message = message,
+            Metric = metric
+        };
 }

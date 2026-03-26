@@ -82,3 +82,8 @@ MinIO:9000/9001, RabbitMQ:5672/15672, PostgreSQL:5432, Redis:6379, Meilisearch:7
 - Expanded docker-compose to include all four services with dependency ordering; QueryEngine now waits on API health.
 - Prometheus now scrapes logs2obs-api and logs2obs-queryengine over the Compose network.
 - Added GitHub Actions CI for restore/build/test and Docker image builds.
+
+### 2026-03-27: Phase 12 — CDK Infrastructure
+- Created the `infra/cdk` CDK v2 project (net10.0) with Program.cs and 8 stack files.
+- Implemented S3/Glue storage, SNS/SQS messaging, OpenSearch domain, DynamoDB tables, Redis cache, Cognito auth, VPC/ALB/WAF networking, and ECS/ECR compute.
+- Verified the CDK project builds cleanly with `dotnet build`.

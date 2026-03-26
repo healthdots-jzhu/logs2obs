@@ -1,6 +1,7 @@
 namespace Logs2Obs.Core.Mapping;
 
 using Logs2Obs.Core.Models;
+using System.Collections.Generic;
 
 /// <summary>Maps between DTOs and domain objects, enforcing system-generated fields.</summary>
 public static class DtoMapper
@@ -22,7 +23,7 @@ public static class DtoMapper
             Message           = dto.Message,
             TraceId           = dto.TraceId,
             StackTrace        = dto.StackTrace,
-            Tags              = dto.Tags,
+            Tags              = dto.Tags ?? new Dictionary<string, string>(),
             Metric            = dto.Metric is null ? null : MapMetric(dto.Metric),
             TenantId          = tenantId,
             IngestedAt        = DateTimeOffset.UtcNow,
