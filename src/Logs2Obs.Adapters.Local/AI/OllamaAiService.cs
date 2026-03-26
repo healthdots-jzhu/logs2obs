@@ -77,6 +77,34 @@ public sealed class OllamaAiService(
             }
         }, ct);
     }
+
+    public async Task<NlQueryResult> TranslateToSqlAsync(string naturalLanguage, QueryContext ctx, CancellationToken ct = default)
+    {
+        var schemaContext = BuildSchemaContext(ctx);
+        var result = await GenerateSqlAsync(ctx.TenantId, naturalLanguage, schemaContext, ct);
+        return new NlQueryResult
+        {
+            Sql = result.Sql,
+            Explanation = result.Explanation,
+            SuggestedGraphType = result.SuggestedGraphType
+        };
+    }
+
+    public Task<IReadOnlyList<GraphSuggestion>> SuggestGraphsAsync(
+        QueryResultSchema schema,
+        string? intent,
+        CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<GraphSuggestion>>([]);
+
+    private static string BuildSchemaContext(QueryContext ctx) =>
+        $"""
+        Tenant: {ctx.TenantId}
+        Environments: {string.Join(", ", ctx.Environments)}
+        Sources: {string.Join(", ", ctx.KnownSources)}
+        LogTypes: {string.Join(", ", ctx.LogTypes)}
+        HotRetentionDays: {ctx.HotRetentionDays}
+        WarmRetentionDays: {ctx.WarmRetentionDays}
+        """;
 }
 
 file sealed class OllamaGenerateRequest

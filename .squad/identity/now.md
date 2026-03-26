@@ -1,29 +1,39 @@
 ---
-updated_at: 2026-03-25T19:11:49Z
-focus_area: Phase 7 — Logs2Obs.QueryEngine (Query Routing & Cost Estimation)
-status: in_progress
-active_agents:
-  - dolores
-  - stubbs
-active_issues:
-  - query-engine-tier-routing
-  - cost-estimation-models
-  - duckdb-athena-adapters
-  - cross-tier-fan-out
+updated_at: 2026-03-25T21:11:45Z
+focus_area: Phase 9 — Logs2Obs.QueryEngine Alerts, MatViews, Replay
+status: Phase 8 complete, Phase 9 next
+completed_phases:
+  - Phase 4 (API): 21 tests ✅
+  - Phase 5 (Worker): 26 tests ✅
+  - Phase 6 (Puller): 32 tests ✅
+  - Phase 7 (QueryEngine): 32 tests ✅
+  - Phase 8 (AI & Graphs): 77 tests ✅
 ---
 
-# What We're Focused On
+# What We've Built — Phase 8 Complete & Phase 9 Next
 
-**Phase 6 complete.** `Logs2Obs.Puller` fully built: `IPullConnector` abstraction with 4 connectors (S3, Azure Blob, CloudWatch, HTTP). Quartz-based scheduler with periodic job execution. `PullJobStateService` for cursor tracking and backfill support. `PullerMetrics` emits pull frequency, latency, items processed/failed (OTel meters). Program.cs runs standalone pull service. All 32 puller tests passing (AwsS3 ×8, AzureBlob ×8, CloudWatch ×6, Http ×4, StateService ×4, Scheduler ×2). Full solution build: 0 errors, 0 warnings.
-
-**Phase 7 next:** Logs2Obs.QueryEngine — query routing and cost estimation. `IQueryService` with full tier routing (Hot/Warm/Cold). Cost estimation models per tier. DuckDB adapter for local/Warm tier, Athena adapter for Cold tier. Cross-tier fan-out with parallel execution and result synthesis. Saved queries, scheduled reports, and audit logging.
+**Phase 8 ✅ COMPLETE:** QueryEngine AI & Graphs fully built and tested.
+- **IAiService extension:** TranslateToSqlAsync, SuggestGraphsAsync (Dolores)
+- **GitHubModelsAiService:** Full NL→SQL with Polly retry, system prompt, audit logging (Dolores)
+- **VegaLiteSpecBuilder & ChartJsConfigBuilder:** 9 graph types each (Dolores)
+- **GraphRenderService:** Unified render pipeline (Dolores)
+- **PrebuiltGraphs:** 8 templates (log-levels, error-trends, response-times, throughput, latency-distribution, error-rate-heatmap, top-services, availability-trends) (Dolores)
+- **Models:** NlQueryResult, QueryContext, GraphRenderRequest, GraphRenderResponse (Dolores)
+- **77 tests all passing:** QueryEngine complete suite, 38 skipped stubs wired (Stubbs)
 
 **Cumulative Test Totals:**
-- Phase 4 (API): 21 tests
-- Phase 5 (Worker): 26 tests  
-- Phase 6 (Puller): 32 tests
-- **Total: 79 tests, all passing**
+- Phase 4 (API): 21 tests ✅
+- Phase 5 (Worker): 26 tests ✅
+- Phase 6 (Puller): 32 tests ✅
+- Phase 7 (QueryEngine): 32 tests ✅
+- Phase 8 (AI & Graphs): 77 tests ✅
+- **Total: 188 tests, all passing**
 
-Status: Phase 7 in progress — Dolores building QueryEngine core, Stubbs scaffolding test suite.
+**Build Status:** 0 errors, 0 warnings (excluding Docker-dependent Adapters.Local.Tests)
 
-Updated by Scribe at 2026-03-25T19:11:49Z
+**Phase 9 Next:** Alerts, MatViews, Replay
+- Materialized view query scheduling
+- Alert correlation & thresholds
+- Timeline replay visualization
+
+Updated by Scribe at 2026-03-25T21:11:45Z.

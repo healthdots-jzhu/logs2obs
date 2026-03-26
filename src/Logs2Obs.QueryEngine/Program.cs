@@ -1,7 +1,10 @@
 using Logs2Obs.Adapters.Local.DependencyInjection;
 using Logs2Obs.Core.Abstractions;
 using Logs2Obs.Core.Commands;
+using Logs2Obs.Core.Graphs;
 using Logs2Obs.Core.Query;
+using Logs2Obs.QueryEngine.AI;
+using Logs2Obs.QueryEngine.Graphs;
 using Logs2Obs.QueryEngine.Options;
 using Logs2Obs.QueryEngine.Services;
 using Logs2Obs.QueryEngine.Telemetry;
@@ -17,6 +20,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(ExecuteSqlQuery).Assembly));
 
         services.Configure<QueryEngineOptions>(ctx.Configuration.GetSection("QueryEngine"));
+        services.Configure<GitHubModelsOptions>(ctx.Configuration.GetSection("LightScope:AI:GitHub"));
 
         services.AddSingleton<ISqlSafetyValidator, SqlSafetyValidator>();
         services.AddSingleton<QueryTierRouter>();
@@ -24,6 +28,24 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<QueryService>();
         services.AddSingleton<SavedQueryService>();
         services.AddSingleton<ScheduledReportService>();
+        services.AddSingleton<GraphSuggestionEngine>();
+        services.AddSingleton<GraphRenderService>();
+        services.AddScoped<AiQueryAuditLogger>();
+
+        var aiProvider = ctx.Configuration["LightScope:AI:Provider"];
+        if (string.Equals(aiProvider, "GitHubModels", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddHttpClient("github-models");
+            services.AddSingleton<IAiService, GitHubModelsAiService>();
+        }
+        else if (string.Equals(aiProvider, "Ollama", StringComparison.OrdinalIgnoreCase))
+        {
+            // Registered by AddLocalAdapters
+        }
+        else
+        {
+            services.AddSingleton<IAiService, NoOpAiService>();
+        }
 
         services.AddOpenTelemetry()
             .WithMetrics(m => m
