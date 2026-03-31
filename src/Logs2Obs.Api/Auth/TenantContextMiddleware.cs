@@ -17,7 +17,10 @@ public sealed class TenantContextMiddleware
     {
         if (context.User.Identity?.IsAuthenticated == true)
         {
-            var tenantIdClaim = context.User.FindFirst("tenantId");
+            // Check canonical "tenant_id" (JWT after normalization) then legacy "tenantId" (ApiKey)
+            var tenantIdClaim = context.User.FindFirst("tenant_id")
+                             ?? context.User.FindFirst("tenantId");
+
             if (tenantIdClaim == null)
             {
                 _logger.LogWarning("Authenticated user missing tenantId claim");

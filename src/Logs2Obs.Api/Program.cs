@@ -55,6 +55,7 @@ app.UseExceptionHandler();
 app.UseMiddleware<PayloadSizeMiddleware>();
 
 app.UseAuthentication();
+app.UseClaimsNormalization();
 app.UseAuthorization();
 
 app.UseMiddleware<TenantContextMiddleware>();
@@ -63,9 +64,7 @@ app.UseRateLimiter();
 
 app.MapHealthChecks("/health/live");
 app.MapHealthChecks("/health/ready");
-
 app.MapPrometheusScrapingEndpoint("/metrics");
-
 app.MapGrpcService<LogIngestionGrpcService>();
 
 app.MapLogsEndpoints();

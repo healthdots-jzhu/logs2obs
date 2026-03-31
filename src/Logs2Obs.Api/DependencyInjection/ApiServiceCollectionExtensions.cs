@@ -1,7 +1,5 @@
-using Logs2Obs.Api.Auth;
+using Logs2Obs.Api.Extensions;
 using Logs2Obs.Api.Options;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.Extensions.Caching.Memory;
 
 namespace Logs2Obs.Api.DependencyInjection;
 
@@ -15,20 +13,7 @@ public static class ApiServiceCollectionExtensions
 
         services.AddMemoryCache();
 
-        services.AddAuthentication(options =>
-        {
-            options.DefaultAuthenticateScheme = ApiKeyAuthOptions.SchemeName;
-            options.DefaultChallengeScheme = ApiKeyAuthOptions.SchemeName;
-        })
-        .AddScheme<ApiKeyAuthOptions, ApiKeyAuthHandler>(
-            ApiKeyAuthOptions.SchemeName,
-            options => config.GetSection("ApiKey").Bind(options))
-        .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
-        {
-            config.GetSection("Jwt").Bind(options);
-        });
-
-        services.AddAuthorization();
+        services.AddMultiIdpAuthentication(config);
 
         return services;
     }
