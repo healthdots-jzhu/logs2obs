@@ -1021,3 +1021,140 @@ None required. Documentation complete. Future enhancements:
 - DtoMapper now defaults null Tags to an empty dictionary to avoid null tags in domain entries.
 - TenantQueryInjector.ValidateTenantId throws ArgumentException for empty/whitespace tenant IDs and retains QueryGuardException for unsafe characters.
 - Logs2Obs.Core.Tests suppresses CA1707 to keep underscore-based test naming convention.
+
+---
+
+## 2026-04-01: Multi-IdP Authentication Architecture
+
+**By:** Bernard (Lead & Architect)  
+**Date:** 2026-04-01 (updated 2026-03-24)  
+**Status:** Active
+
+### Context
+
+logs2obs.Api previously supported a single JwtBearer scheme bound to a static Jwt config section. With enterprise adoption spanning AWS Cognito pools and Entra ID tenants, a single-IdP model was a hard blocker.
+
+### Decision
+
+Config-driven multi-IdP authentication in Logs2Obs.Api.DependencyInjection.ApiServiceCollectionExtensions. Each IdP is declared in ppsettings.json under Auth:IdentityProviders[] with:
+
+- **Authority** — triggers automatic OIDC discovery + JWKS fetching; no secrets required (RS256 asymmetric)
+- **Audiences** — string[] to support multiple client IDs per Cognito pool (same pool, N service accounts)
+- **ClaimsMappings** — Dictionary<string, string> where **key = IdP-specific claim name, value = canonical claim name** (e.g. { "custom:tenantId": "tenantId" } for Cognito)
+
+TokenValidationParameters.AuthenticationType is set to idp.Name on each JWT scheme registration so that ClaimsIdentity.AuthenticationType matches the scheme name, enabling lookup in ClaimsNormalizationMiddleware.
+
+The DefaultPolicy and FallbackPolicy are built with all registered scheme names (ApiKey + all JWT IdPs) so any authenticated scheme satisfies [Authorize].
+
+Backward compat: when Auth:IdentityProviders is empty/absent, the legacy Jwt config section registers a single JwtBearerDefaults.AuthenticationScheme.
+
+### Canonical Claim Convention
+
+| Canonical | Description |
+|---|---|
+| 	enantId | Tenant identifier — always read by TenantContextMiddleware |
+| sub | Subject / user identifier (standard JWT) |
+
+TenantContextMiddleware reads 	enantId (set directly by ApiKeyAuthHandler or normalised from IdP-specific claim by ClaimsNormalizationMiddleware).
+
+### ClaimsNormalizationMiddleware
+
+Runs after UseAuthorization, before TenantContextMiddleware. Logic:
+1. Skip unauthenticated requests.
+2. Match ClaimsIdentity.AuthenticationType against IdentityProviderOptions.Name to find the IdP config.
+3. For each ClaimsMappings entry: if the source (IdP) claim exists and the target (canonical) claim does NOT, add the canonical claim.
+4. Append a new ClaimsIdentity with the added claims — does not mutate the original identity.
+
+### Zero Trust
+
+Internal M2M microservices are registered as their own IdP entry (Cognito M2M client credentials flow). No subnet bypass; every request carries a verifiable JWT.
+
+### Tradeoffs
+
+- **OIDC Discovery latency on startup:** JwtBearerHandler fetches JWKS on first token validation. Mitigated by background key refresh caching in JwtBearerHandler.
+- **Scheme proliferation:** Each IdP = one AddJwtBearer scheme. 10 IdPs = 10 schemes. Manageable; unlikely to exceed single digits.
+
+### Files
+
+| File | Role |
+|---|---|
+| Auth/IdentityProviderOptions.cs | Config model — IdentityProviderOptions only (AuthOptions removed) |
+| Auth/MultiIdpOptions.cs | Config wrapper — MultiIdpOptions bound from Auth section |
+| Auth/ClaimsNormalizationMiddleware.cs | Per-request claim rewriting |
+| DependencyInjection/ApiServiceCollectionExtensions.cs | Consolidated DI registration (multi-IdP + backward compat) |
+| ppsettings.json | Cognito + EntraID example with {REPLACE_ME} placeholders |
+
+---
+
+## 2026-03-28: Multi-IdP JWT Authentication Documentation Update
+
+**Date:** 2026-03-28  
+**Owner:** Felix (DevOps & Infra)  
+**Status:** Completed  
+**Related Commit:** 4ba2ba0
+
+### Context
+
+Commit 625362b shipped multi-IdP JWT authentication (OIDC-driven, config-based). The original docs/security.md described JWT auth as Cognito-only. Documentation needed to be updated to reflect the new flexible architecture while preserving existing Cognito examples.
+
+### Changes Made
+
+#### docs/security.md
+
+**Section "JWT Authentication (Multi-IdP)" — renamed & expanded:**
+- Removed single-provider "JWT Authentication (Cognito)" heading
+- Added "Multi-IdP Configuration" subsection:
+  - IdentityProviderOptions schema explained (Name, Authority, Audiences[], ClaimsMappings)
+  - JSON config examples for: AWS Cognito, Microsoft Entra ID, Okta/generic OIDC, multiple Cognito pools
+  - OIDC discovery mechanism (auto-fetch public keys via /.well-known/openid-configuration)
+  - RS256 asymmetric validation; no secrets stored — only public Authority URL and Audiences needed
+
+**Subsection "Cognito-Specific Example" — preserved & contextualized:**
+- Kept all original CDK code examples (UserPool setup, MFA config)
+- Kept all original CLI examples (auth flow, token response, API calls)
+- Reframed as "Cognito example under multi-IdP umbrella"
+
+**New subsection "Entra ID (Azure AD) Example":**
+- Config template for Microsoft Entra ID
+- OAuth2 token endpoint call via curl
+
+**New subsection "Okta / Generic OIDC Example":**
+- Template for any OIDC-compliant provider
+- Custom claim mapping example
+
+**New subsection "Multiple Cognito Pools Example":**
+- Shows how ClaimsMappings unifies claims across multiple environments (dev/prod)
+
+**New subsection "Internal Service Authentication (M2M)":**
+- Explained Zero Trust principle for service-to-service
+- Cognito client credentials flow (OAuth2 client_credentials grant)
+- Resource server + M2M client CDK setup example
+- Token request curl example
+- Scope validation explanation (logs2obs-api/ingest)
+
+#### docs/api-reference.md
+
+**Section "2. JWT Bearer Token":**
+- Updated "Note" to remove Cognito-only language
+- Clarified: "JWT tokens are issued by any configured OIDC-compliant identity provider"
+- Added reference to docs/security.md for multi-IdP setup
+
+### Rationale
+
+1. **No single-IdP assumption:** Reflects production-ready multi-tenant deployments (e.g., Cognito + Entra ID hybrid auth)
+2. **Config-driven flexibility:** Emphasizes that adding new IdPs requires only configuration changes, not code
+3. **Backward compatibility:** Legacy Jwt section still works; documented in code comments
+4. **M2M best practice:** Service-to-service pattern separated from user auth; uses OAuth2 client credentials (industry standard)
+5. **Examples cover 80% of deployments:** Cognito, Entra ID, Okta, multi-Cognito
+
+### Backward Compatibility
+
+- If Auth:IdentityProviders is empty, system falls back to legacy Jwt section
+- No breaking changes to API or CDK infrastructure
+- Documentation does not mandate multi-IdP adoption; legacy single-Cognito deployments unaffected
+
+### References
+
+- Implementation: src/Logs2Obs.Api/Auth/IdentityProviderOptions.cs, MultiIdpOptions.cs, ClaimsNormalizationMiddleware.cs
+- Config example: src/Logs2Obs.Api/appsettings.json (Auth.IdentityProviders section)
+- Original feature commit: 625362b
