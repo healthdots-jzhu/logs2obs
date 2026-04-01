@@ -129,3 +129,42 @@ MinIO:9000/9001, RabbitMQ:5672/15672, PostgreSQL:5432, Redis:6379, Meilisearch:7
 - Backward compat: legacy `Jwt` section still works if `Auth:IdentityProviders` empty
 - Commit: 4ba2ba0
 
+### 2026-03-28: WAF Security Hardening
+- Added two new WAF security rules to `infra/cdk/Stacks/NetworkStack.cs`:
+  - Priority 2: Rate-based rule blocks IPs making >2,000 requests per 5-minute window
+  - Priority 3: AWS Managed IP Reputation List blocks known malicious IPs from AWS threat intelligence
+- Enabled WAF logging to CloudWatch Logs with 90-day retention (LogGroup: `aws-waf-logs-logs2obs`)
+- Rate-based rule uses custom `Action` (not `OverrideAction`) because it's a custom rule, not a managed rule group
+- All 4 WAF rules now in priority order: CommonRuleSet(0), KnownBadInputs(1), RateLimit(2), IpReputation(3)
+- Added `using Amazon.CDK.AWS.Logs` to import CloudWatch Logs constructs
+- Build verified successfully with no compile errors
+- Commit: dfc64e1
+
+### 2026-03-28: Security Hardening Documentation Update
+- **Documented ForwardedHeaders middleware:**
+  - `UseForwardedHeaders()` positioned as FIRST middleware in pipeline
+  - Configured to trust `X-Forwarded-For` and `X-Forwarded-Proto` from RFC1918 private ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
+  - Explained critical impact on rate limiting — without this, all traffic behind ALB appears as single IP, breaking per-client rate limiting
+- **Documented Kestrel data rate limits:**
+  - `MinRequestBodyDataRate`: 100 bytes/sec with 10-second grace period
+  - `MinResponseDataRate`: 100 bytes/sec with 10-second grace period
+  - `RequestHeadersTimeout`: 15 seconds
+  - `KeepAliveTimeout`: 120 seconds
+  - Explained slow loris attack mitigation and connection exhaustion prevention
+- **Documented request timeouts:**
+  - Default: 5 seconds
+  - Ingest (POST /api/v1/logs): 10 seconds
+  - Query (POST /api/v1/query/*): 30 seconds
+  - Explained per-endpoint timeout policies based on expected latency profiles
+  - Included runaway query scenario showing how timeouts prevent thread pool exhaustion
+- **Documented WAF rules comprehensively:**
+  - Rate-based rule (2,000 requests/5 min) with attack scenario
+  - AWS Managed IP Reputation List for known-bad IPs
+  - WAF logging to CloudWatch with 90-day retention
+  - CloudWatch query examples for security auditing
+- All documentation includes practical attack scenarios and real-world examples
+- Updated `docs/security.md` sections: 6a "Infrastructure Security (AWS WAF)" and 6b "Application-Layer Hardening"
+- Commit: c462450
+
+
+
