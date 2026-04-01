@@ -35,10 +35,6 @@
 - **Next:** Monitor HSTS in production logs; implement CSP when routes stable; set Preload=true + submit to hstspreload.org when domain production-ready.
 - **Commit:** d373489
 
----
-
-## Phase 9 Decisions
-
 ### Felix Phase 9 — CI/CD GitHub Actions Workflows
 
 #### deploy.yml — ECR Push + ECS Deployment
