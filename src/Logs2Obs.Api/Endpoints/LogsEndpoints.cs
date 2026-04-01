@@ -3,6 +3,7 @@ using Logs2Obs.Api.Models;
 using Logs2Obs.Core.Commands;
 using Logs2Obs.Core.Models;
 using MediatR;
+using Microsoft.AspNetCore.Http.Timeouts;
 using Microsoft.Extensions.Logging;
 
 namespace Logs2Obs.Api.Endpoints;
@@ -17,16 +18,19 @@ public static class LogsEndpoints
 
         group.MapPost("", IngestLogs)
             .WithName("IngestLogs")
-            .WithOpenApi();
+            .WithOpenApi()
+            .WithRequestTimeout("IngestTimeout");
 
         group.MapPost("/bulk", IngestBulk)
             .WithName("IngestBulk")
             .WithOpenApi()
-            .DisableAntiforgery();
+            .DisableAntiforgery()
+            .WithRequestTimeout("IngestTimeout");
 
         group.MapPost("/metrics", IngestMetrics)
             .WithName("IngestMetrics")
-            .WithOpenApi();
+            .WithOpenApi()
+            .WithRequestTimeout("IngestTimeout");
 
         return app;
     }

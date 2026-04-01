@@ -3,6 +3,7 @@ using Logs2Obs.Api.Models;
 using Logs2Obs.Core.Abstractions;
 using Logs2Obs.Core.Commands;
 using MediatR;
+using Microsoft.AspNetCore.Http.Timeouts;
 
 namespace Logs2Obs.Api.Endpoints;
 
@@ -16,35 +17,43 @@ public static class QueryEndpoints
 
         group.MapPost("/sql", ExecuteSqlQuery)
             .WithName("ExecuteSqlQuery")
-            .WithOpenApi();
+            .WithOpenApi()
+            .WithRequestTimeout("QueryTimeout");
 
         group.MapGet("/{queryId}/status", GetQueryStatus)
             .WithName("GetQueryStatus")
-            .WithOpenApi();
+            .WithOpenApi()
+            .WithRequestTimeout("QueryTimeout");
 
         group.MapGet("/{queryId}/results", GetQueryResults)
             .WithName("GetQueryResults")
-            .WithOpenApi();
+            .WithOpenApi()
+            .WithRequestTimeout("QueryTimeout");
 
         group.MapPost("/search", SearchLogs)
             .WithName("SearchLogs")
-            .WithOpenApi();
+            .WithOpenApi()
+            .WithRequestTimeout("QueryTimeout");
 
         group.MapPost("/natural", NaturalLanguageQuery)
             .WithName("NaturalLanguageQuery")
-            .WithOpenApi();
+            .WithOpenApi()
+            .WithRequestTimeout("QueryTimeout");
 
         group.MapGet("/saved", ListSavedQueries)
             .WithName("ListSavedQueries")
-            .WithOpenApi();
+            .WithOpenApi()
+            .WithRequestTimeout("QueryTimeout");
 
         group.MapPost("/saved", SaveQuery)
             .WithName("SaveQuery")
-            .WithOpenApi();
+            .WithOpenApi()
+            .WithRequestTimeout("QueryTimeout");
 
         group.MapPost("/saved/{id}/run", RunSavedQuery)
             .WithName("RunSavedQuery")
-            .WithOpenApi();
+            .WithOpenApi()
+            .WithRequestTimeout("QueryTimeout");
 
         return app;
     }

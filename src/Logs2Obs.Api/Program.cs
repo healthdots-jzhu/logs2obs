@@ -7,12 +7,25 @@ using Logs2Obs.Api.Middleware;
 using Logs2Obs.Api.Options;
 using Logs2Obs.Api.RateLimiting;
 using Logs2Obs.Core.DependencyInjection;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MinRequestBodyDataRate = new MinDataRate(
+        bytesPerSecond: 100,
+        gracePeriod: TimeSpan.FromSeconds(10));
+    options.Limits.MinResponseDataRate = new MinDataRate(
+        bytesPerSecond: 100,
+        gracePeriod: TimeSpan.FromSeconds(10));
+    options.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(15);
+    options.Limits.KeepAliveTimeout = TimeSpan.FromSeconds(120);
+});
 
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj} {Properties:j}{NewLine}{Exception}")
@@ -48,9 +61,12 @@ builder.Services.AddProblemDetails();
 
 var app = builder.Build();
 
+app.UseForwardedHeaders();
+
 app.UseSerilogRequestLogging();
 
 app.UseExceptionHandler();
+app.UseRequestTimeouts();
 
 app.UseMiddleware<PayloadSizeMiddleware>();
 
