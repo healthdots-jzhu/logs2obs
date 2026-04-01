@@ -36,7 +36,7 @@ builder.Services.AddOpenTelemetry()
 builder.Services.AddLogs2ObsCore();
 builder.Services.AddLocalAdapters(builder.Configuration);
 builder.Services.AddLogs2ObsApi(builder.Configuration);
-builder.Services.AddTenantRateLimiting();
+builder.Services.AddTenantRateLimiting(builder.Configuration);
 
 builder.Services.AddHealthChecks();
 
