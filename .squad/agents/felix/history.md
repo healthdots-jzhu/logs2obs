@@ -193,3 +193,30 @@ MinIO:9000/9001, RabbitMQ:5672/15672, PostgreSQL:5432, Redis:6379, Meilisearch:7
 - 90-day retention aligns with standard security audit requirements
 
 **Next monitoring:** Hook WAF BlockedRequests metric to CloudWatch Alarm for attack detection.
+
+### 2026-04-XX: HTTP Security Headers & HSTS Documentation
+
+**Commit:** d848f71
+
+**Documented Bernard's security hardening implementations:**
+
+1. **SecurityHeadersMiddleware** (`src/Logs2Obs.Api/Middleware/SecurityHeadersMiddleware.cs`):
+   - Applied globally to all HTTP responses via middleware pipeline
+   - Five security headers: X-Content-Type-Options (nosniff), X-Frame-Options (DENY), Referrer-Policy (no-referrer), X-XSS-Protection (0), Permissions-Policy (geolocation/microphone/camera blocked)
+   - Attack scenarios documented: MIME-type sniffing prevention, clickjacking defense, referrer leakage prevention
+   - CSP intentionally excluded pending UI architecture stabilization (graph rendering, OpenAPI UI isolation)
+
+2. **HSTS (HTTP Strict Transport Security)**:
+   - Registered in `AddLogs2ObsApi()` with `services.AddHsts()`
+   - Active via `app.UseHsts()` in non-Development environments only
+   - Policy: `max-age=31536000 (1 year), includeSubDomains=true, Preload=false`
+   - Rationale for non-dev only: HSTS on localhost breaks local tooling (curl, Docker health checks, Postman)
+   - Rationale for Preload=false: Only enable after domain verified stable in production ≥3 months
+   - Defense-in-depth: complements ALB HTTP→HTTPS redirect at edge layer
+
+3. **Middleware Pipeline Order Reference**:
+   - Added 11-item ordered table showing correct pipeline sequence and security implications
+   - Critical violations documented: ForwardedHeaders after rate-limiting breaks per-client bucketing, Exception handler before auth leaks stack traces, etc.
+   - Helps operators troubleshoot security issues if pipeline is ever customized
+
+**Key design decision:** Middleware pipeline order is security-critical; wrong order can bypass controls. Reference table serves as both documentation and deployment checklist.
