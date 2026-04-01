@@ -240,3 +240,35 @@ In a file-scoped namespace `namespace A.B.C.Tests.Foo;`, identifiers are resolve
 **Key decision:** Middleware order is critical — UseForwardedHeaders() must be first (before Serilog + rate limiter) so all downstream middleware sees the real client IP.
 
 **Next monitoring:** Verify real client IPs in ALB access logs and CloudWatch Insights rate limiter metrics.
+
+### 2026-04-01: HTTP Security Headers & HSTS
+
+**Commit:** d373489
+
+**Implemented:**
+1. **SecurityHeadersMiddleware** — Adds 5 standard security response headers to every response:
+   - `X-Content-Type-Options: nosniff` (prevent MIME sniffing)
+   - `X-Frame-Options: DENY` (prevent clickjacking)
+   - `Referrer-Policy: no-referrer` (no referrer leak cross-origin)
+   - `X-XSS-Protection: 0` (disable legacy XSS filter)
+   - `Permissions-Policy: geolocation=(), microphone=(), camera=()` (restrict browser features)
+2. **HSTS configuration** — `UseHsts()` with 365-day max age, IncludeSubDomains=true, Preload=false (non-dev only). Emits `Strict-Transport-Security` header for HTTPS enforcement.
+
+**Design decisions:**
+- No `Content-Security-Policy` — would break OpenAPI UI in development; requires per-route tuning. Can be added later.
+- Middleware comment documents values could be config-driven if CSP is added.
+- HSTS only enabled in non-development environments to avoid local HTTPS issues.
+- Middleware pipeline order: `UseForwardedHeaders()` → `UseHsts()` → `SecurityHeadersMiddleware` → `UseSerilogRequestLogging()` — headers set before any response writing.
+
+**Build & Tests:**
+- Build: 0 errors, 0 warnings ✅
+- Tests: 221 passed, 25 skipped, 0 failed ✅
+
+**Files created:**
+- src/Logs2Obs.Api/Middleware/SecurityHeadersMiddleware.cs
+
+**Files modified:**
+- src/Logs2Obs.Api/DependencyInjection/ApiServiceCollectionExtensions.cs (added `AddHsts()`)
+- src/Logs2Obs.Api/Program.cs (added `UseHsts()` + `UseMiddleware<SecurityHeadersMiddleware>()`)
+
+**Security impact:** API now emits standard defense-in-depth response headers on every response, plus enforces HTTPS in production via HSTS.

@@ -1017,6 +1017,190 @@ aws logs filter-log-events \
 
 ## 6b. Application-Layer Hardening
 
+### HTTP Security Headers
+
+Every HTTP response from logs2obs includes a standard set of security headers to prevent common browser-based attacks. These headers are applied via `SecurityHeadersMiddleware` and are sent with all responses, regardless of content type.
+
+**Configuration (Program.cs):**
+
+```csharp
+// SecurityHeadersMiddleware applies to all HTTP responses
+app.UseMiddleware<SecurityHeadersMiddleware>();
+```
+
+**Headers Set:**
+
+| Header | Value | Purpose |
+|--------|-------|---------|
+| `X-Content-Type-Options` | `nosniff` | Prevents MIME-type sniffing (blocks .js files from being executed as HTML, etc.) |
+| `X-Frame-Options` | `DENY` | Prevents clickjacking — logs2obs cannot be embedded in an `<iframe>` by any site |
+| `Referrer-Policy` | `no-referrer` | Prevents referrer leakage to third-party services when users navigate away |
+| `X-XSS-Protection` | `0` | Explicitly disables legacy IE XSS filter (modern browsers ignore this; CSP handles XSS) |
+| `Permissions-Policy` | `geolocation=(), microphone=(), camera=()` | Restricts access to sensitive browser features (GPS, microphone, camera) |
+
+**Example Response:**
+
+```
+HTTP/1.1 200 OK
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Referrer-Policy: no-referrer
+X-XSS-Protection: 0
+Permissions-Policy: geolocation=(), microphone=(), camera=()
+Content-Type: application/json
+...
+```
+
+**Attack Scenarios Prevented:**
+
+1. **MIME-Type Sniffing:** Attacker uploads `malware.js` with `Content-Type: text/plain`. Without `X-Content-Type-Options: nosniff`, old browsers execute it as JavaScript. **With the header:** browser respects the declared type.
+
+2. **Clickjacking:** Attacker embeds logs2obs in a hidden iframe and tricks users into clicking invisible buttons. **`X-Frame-Options: DENY`** prevents embedding entirely.
+
+3. **Referrer Leakage:** User navigates from logs2obs to external site; browser normally sends `Referer: https://logs.internal.com/api/v1/query?...`. **`Referrer-Policy: no-referrer`** prevents this.
+
+**Content-Security-Policy (CSP) — Intentionally Excluded:**
+
+CSP is **not** included in the default headers because logs2obs uses dynamically generated graphs (Vega-Lite, Chart.js) and OpenAPI/Swagger UI. A blanket CSP policy would require `'unsafe-inline'` or `'unsafe-eval'`, defeating the purpose. CSP becomes practical only after:
+- Graph rendering is moved to a separate, isolated iframe
+- UI framework and OpenAPI viewer are locked to specific CDN origins
+
+**Future:** Add CSP headers on a per-route basis when UI architecture stabilizes.
+
+---
+
+### HSTS (HTTP Strict Transport Security)
+
+HSTS forces browsers to always use HTTPS when connecting to logs2obs, preventing downgrade attacks (e.g., MITM forcing HTTP → HTTP redirect).
+
+**Configuration (Program.cs):**
+
+```csharp
+// In AddLogs2ObsApi():
+services.AddHsts(options =>
+{
+    options.MaxAge = TimeSpan.FromDays(365);  // 1 year
+    options.IncludeSubDomains = true;
+    options.Preload = false;
+});
+
+// In app middleware pipeline (non-development only):
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+}
+```
+
+**Header Sent (non-development only):**
+
+```
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+```
+
+**What it does:**
+
+- **`max-age=31536000`** (1 year): Browser caches this policy for 365 days. All requests to logs2obs (including subdomains) must use HTTPS. Violating requests are rejected.
+- **`includeSubDomains`**: Policy applies to subdomains (e.g., `api.logs.example.com`, `admin.logs.example.com`).
+- **`Preload`** (set to `false`): Do NOT preload into the browser's HSTS preload list. Only enable after verifying domain stability in production.
+
+**Why non-development only?**
+
+On `localhost`, HSTS breaks local dev tooling:
+- curl/Postman cannot bypass certificate validation over HTTPS
+- Docker containers cannot route to `localhost` HSTS-enforced addresses
+- HTTP health checks fail
+
+**Defense-in-Depth with ALB:**
+
+logs2obs implements HSTS at both the edge and application layers:
+
+1. **ALB (edge):** HTTP requests redirected to HTTPS at the load balancer
+2. **Application (app):** HSTS header tells browsers to never send HTTP requests, even if redirects are intercepted
+
+If an attacker somehow compromises the ALB's redirect logic, the HSTS header still protects users whose browsers have cached the policy.
+
+**Preload Consideration:**
+
+Setting `Preload = true` adds logs2obs to the public HSTS preload list, which is baked into browsers (Chrome, Firefox, Safari). This prevents MITM even on the first visit. However, once a domain is on the preload list, removal can take months. Only enable after:
+- Domain is confirmed stable in production for ≥3 months
+- All subdomains support HTTPS
+- You have tested the `removeSubDomains` flow if subdomains ever stop supporting HTTPS
+
+---
+
+### Middleware Pipeline Order
+
+The order of middleware in the ASP.NET Core pipeline is critical. A single out-of-order middleware can bypass security controls.
+
+**Correct Order (Program.cs):**
+
+```csharp
+// 1. Fix real client IPs behind ALB
+app.UseForwardedHeaders();
+
+// 2. HSTS policy (non-dev only) — must be early to catch redirects
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+}
+
+// 3. Security headers (all responses)
+app.UseMiddleware<SecurityHeadersMiddleware>();
+
+// 4. Request/response logging
+app.UseSerilogRequestLogging();
+
+// 5. Global exception handler
+app.UseExceptionHandler();
+
+// 6. Request timeout enforcement
+app.UseRequestTimeouts();
+
+// 7. Payload size validation
+app.UseMiddleware<PayloadSizeMiddleware>();
+
+// 8. Authentication / Authorization
+app.UseAuthentication();
+app.UseAuthorization();
+
+// 9. Normalize tenant claims
+app.UseMiddleware<ClaimsNormalizationMiddleware>();
+
+// 10. Extract tenant from claims/header
+app.UseMiddleware<TenantContextMiddleware>();
+
+// 11. Rate limiting (must be after tenant context)
+app.UseRateLimiter();
+
+// 12. Map endpoints
+app.MapControllers();
+```
+
+**Reference Table:**
+
+| Priority | Middleware | Purpose | Security Impact |
+|----------|------------|---------|-----------------|
+| 1 | `UseForwardedHeaders()` | Restore real client IPs from ALB headers | Required for accurate rate limiting, auditing, IP-based access control |
+| 2 | `UseHsts()` | Strict Transport Security (non-dev) | Prevents HTTP downgrade attacks |
+| 3 | `SecurityHeadersMiddleware` | Apply security headers (X-Frame-Options, etc.) | Browser-level protection from MIME sniffing, clickjacking, XSS |
+| 4 | `UseSerilogRequestLogging()` | Structured request/response logging | Audit trail for compliance (SOC 2, HIPAA) |
+| 5 | `UseExceptionHandler()` | Catch unhandled exceptions, return safe error | Prevents information leakage in stack traces |
+| 6 | `UseRequestTimeouts()` | Enforce per-endpoint timeout policies | Prevents runaway queries from exhausting thread pool |
+| 7 | `PayloadSizeMiddleware` | Validate request body size limits | DoS prevention — blocks multi-GB uploads |
+| 8 | `UseAuthentication()` / `UseAuthorization()` | API key, JWT validation | Establishes authenticated identity |
+| 9 | `ClaimsNormalizationMiddleware` | Map IdP-specific claims to canonical `tenantId` | Tenant isolation depends on canonical claim |
+| 10 | `TenantContextMiddleware` | Extract tenant from claims/header into context | Downstream code accesses `HttpContext.Items["tenant"]` |
+| 11 | `UseRateLimiter()` | Per-tenant, per-IP rate limiting | DDoS mitigation at application layer |
+
+**Critical Order Violations:**
+
+- **Authentication after rate limiting?** Unauthenticated traffic consumes rate limit quota (usually acceptable, prevents unauthenticated DDoS).
+- **ForwardedHeaders after rate limiting?** All traffic appears to come from ALB IP; per-client rate limiting broken.
+- **Exception handler before authentication?** Attacker errors expose internal URLs/stack traces.
+- **Tenant middleware before authentication?** Claims not yet populated; tenant extraction fails.
+
+---
+
 ### Kestrel Minimum Data Rate (Slow Loris Mitigation)
 
 Kestrel (the ASP.NET Core HTTP server) enforces minimum data rate thresholds to prevent **slow loris** attacks where attackers hold connections open by sending data very slowly or not at all.

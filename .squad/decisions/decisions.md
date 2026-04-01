@@ -24,6 +24,19 @@
 
 ---
 
+## Phase 9 Decisions (Continued)
+
+### Bernard Security Headers — HTTP Security & HSTS
+- **Implemented:** SecurityHeadersMiddleware.cs with 5 hardcoded security headers: X-Content-Type-Options, X-Frame-Options, Referrer-Policy, X-XSS-Protection, Permissions-Policy.
+- **HSTS Configuration:** AddHsts() + UseHsts() via ApiServiceCollectionExtensions; 365-day max-age, IncludeSubDomains=true, Preload=false (irreversible until production-stable).
+- **Pipeline Order:** ForwardedHeaders → HSTS → SecurityHeaders → SerilogLogging (headers must set before response writing; HSTS after ForwardedHeaders to see correct scheme from ALB).
+- **CSP Deferred:** Content-Security-Policy omitted for now (requires per-route tuning, breaks OpenAPI UI in dev; defer until UI routes stabilize).
+- **Testing:** 221/221 tests pass; build 0 errors/warnings; manual verification via `curl -i` confirms headers present.
+- **Next:** Monitor HSTS in production logs; implement CSP when routes stable; set Preload=true + submit to hstspreload.org when domain production-ready.
+- **Commit:** d373489
+
+---
+
 ## Phase 9 Decisions
 
 ### Felix Phase 9 — CI/CD GitHub Actions Workflows
