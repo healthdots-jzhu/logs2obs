@@ -149,3 +149,71 @@ In a file-scoped namespace `namespace A.B.C.Tests.Foo;`, identifiers are resolve
 
 **Skill documented:** `.squad/skills/multi-idp-auth/SKILL.md`  
 **Decision documented:** `.squad/decisions/inbox/bernard-multi-idp-auth.md`
+
+### Fix: RateLimiterOptions Config Wiring + API Security Hardening Review (2026-04-01)
+
+**Commit:** 3bc9cfe  
+**Build Status:** SUCCESS (0 errors, 0 warnings)  
+**Tests:** 221 passed, 25 skipped (AWS + JWT stubs), 0 failed
+
+**Problem:** `TenantRateLimiterExtensions.cs` hardcoded `TokenLimit = 1000`, `TokensPerPeriod = 500`, `PermitLimit = 100` — identical to the defaults in `RateLimiterOptions`, meaning `appsettings.json`'s `RateLimiter` section was silently ignored.
+
+**Fix:**
+- `AddTenantRateLimiting()` now accepts `IConfiguration config` parameter.
+- Reads `config.GetSection("RateLimiter").Get<ApiRateLimiterOptions>()` at startup, falls back to `new ApiRateLimiterOptions()` if section is absent.
+- `Program.cs` updated from `AddTenantRateLimiting()` → `AddTenantRateLimiting(builder.Configuration)`.
+
+**Name collision quirk:** `Microsoft.AspNetCore.RateLimiting` also has a `RateLimiterOptions` type. Resolved with a using alias: `using ApiRateLimiterOptions = Logs2Obs.Api.Options.RateLimiterOptions;` — keeps the code unambiguous without renaming the options class.
+
+**Files Modified:**
+- `src/Logs2Obs.Api/RateLimiting/TenantRateLimiterExtensions.cs` — accepts `IConfiguration`, reads opts from config section
+- `src/Logs2Obs.Api/Program.cs` — passes `builder.Configuration` to `AddTenantRateLimiting`
+
+**Security Hardening Review:** Produced a full DDoS / API hardening table for Jason covering 12 concern areas. Key gaps identified:
+1. WAF has no rate-based rule — highest priority to add
+2. `UseForwardedHeaders` missing — anonymous bucket always "unknown" behind ALB
+3. No Kestrel min data rate — slow loris exposure
+4. No request timeouts — thread exhaustion risk
+5. No security response headers — X-Content-Type-Options, X-Frame-Options etc. absent
+6. HSTS not configured in app layer (ALB redirects HTTP, but no HSTS header sent)
+
+**Already solid:** tenant rate limiting (now config-driven), payload size limit, multi-IdP JWT, WAF managed rules, HTTP→HTTPS ALB redirect, OTel + Serilog, Polly circuit breakers.
+
+**Decision documented:** `.squad/decisions/inbox/bernard-api-hardening.md`
+
+### Security Hardening Implementation: ForwardedHeaders, Kestrel Limits, Request Timeouts (2026-04-01)
+
+**Commit:** 29d5df5  
+**Build Status:** SUCCESS (0 errors, 0 warnings)  
+**Tests:** 221 passed, 25 skipped, 0 failed
+
+**Problem:** Three critical ASP.NET Core security hardening items missing:
+1. `UseForwardedHeaders` — anonymous rate limiter buckets all ALB traffic to "unknown" IP
+2. Kestrel min data rate — slow loris / connection exhaustion vulnerability
+3. Request timeouts — thread exhaustion risk on long-running queries
+
+**Changes Made:**
+
+**Item 1: ForwardedHeaders (fixes anonymous IP bucketing)**
+- `ApiServiceCollectionExtensions.cs`: Added `ForwardedHeadersOptions` configuration trusting X-Forwarded-For from RFC1918 private subnets (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16) to cover ALB in 10.0.x.x VPC subnets.
+- `Program.cs`: Added `app.UseForwardedHeaders()` as FIRST middleware (before `UseSerilogRequestLogging()`), ensuring real client IP flows to rate limiter, Serilog, and all downstream middleware.
+- Used `KnownIPNetworks` (not obsolete `KnownNetworks`) and fully-qualified `System.Net.IPNetwork` to avoid ambiguity with `Microsoft.AspNetCore.HttpOverrides.IPNetwork`.
+
+**Item 2: Kestrel Min Data Rate (slow loris mitigation)**
+- `Program.cs`: Added `ConfigureKestrel()` with `MinRequestBodyDataRate` and `MinResponseDataRate` (100 bytes/sec, 10s grace), `RequestHeadersTimeout` (15s), `KeepAliveTimeout` (120s).
+
+**Item 3: Request Timeouts (per-endpoint timeout policies)**
+- `ApiServiceCollectionExtensions.cs`: Added `AddRequestTimeouts()` with 5s default, 10s "IngestTimeout", 30s "QueryTimeout".
+- `Program.cs`: Added `app.UseRequestTimeouts()` after `UseExceptionHandler()` and before `PayloadSizeMiddleware`.
+- `LogsEndpoints.cs`: Applied `.WithRequestTimeout("IngestTimeout")` to all 3 ingest endpoints.
+- `QueryEndpoints.cs`: Applied `.WithRequestTimeout("QueryTimeout")` to all 8 query endpoints.
+- Used fully-qualified `Microsoft.AspNetCore.Http.Timeouts.RequestTimeoutPolicy` in DI config to avoid needing using directive.
+
+**Key Quirks:**
+- .NET 10 obsoleted `ForwardedHeadersOptions.KnownNetworks` → `KnownIPNetworks` (ASPDEP PR005 warnings treated as errors).
+- `IPNetwork` ambiguity: both `System.Net.IPNetwork` and `Microsoft.AspNetCore.HttpOverrides.IPNetwork` exist; used fully-qualified `System.Net.IPNetwork`.
+- `RequestTimeoutPolicy` required `Microsoft.AspNetCore.Http.Timeouts` using in endpoints files; fully-qualified in DI config to avoid polluting global usings.
+
+**Security impact:** Rate limiter now sees real client IPs (not ALB IP), slow clients are rejected within 10s, queries time out at 30s max (prevents thread pool exhaustion).
+
+**Decision documented:** `.squad/decisions/inbox/bernard-security-hardening.md`
