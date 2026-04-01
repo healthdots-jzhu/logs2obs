@@ -28,7 +28,7 @@ Send a JWT token in the `Authorization: Bearer {token}` header. Suitable for web
 curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." http://localhost:8080/api/v1/query/natural
 ```
 
-**Note:** JWT tokens are issued by Cognito (AWS), Entra ID (Azure), or Firebase Auth (GCP). The `sub` claim maps to `tenantId`.
+**Note:** JWT tokens are issued by any configured OIDC-compliant identity provider (Cognito, Entra ID, Okta, etc.). The token must contain a `tenantId` claim (mapped from IdP-specific claim names via configuration). See `docs/security.md` for multi-IdP setup.
 
 ---
 

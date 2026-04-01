@@ -70,11 +70,60 @@ curl -X DELETE http://localhost:8080/api/v1/auth/keys/key_01HZ9X... \
 
 ---
 
-### JWT Authentication (Cognito)
+### JWT Authentication (Multi-IdP)
 
-#### Setting Up Cognito via CDK
+logs2obs supports **flexible, multi-identity provider (IdP) JWT authentication** via OIDC discovery. No client secrets required — public keys are fetched automatically. Configure one or more OIDC-compliant IdPs in `appsettings.json` under `Auth:IdentityProviders`.
 
-logs2obs uses AWS Cognito for JWT-based authentication. Deploy the `AuthStack` in your CDK infrastructure:
+#### Multi-IdP Configuration
+
+Each identity provider entry specifies:
+- **`Name`** — Scheme name (e.g., "Cognito-Prod", "Entra-Dev")
+- **`Authority`** — OIDC authority URL; ASP.NET Core auto-appends `/.well-known/openid-configuration`
+- **`Audiences`** — Array of accepted client IDs; validation skipped if empty
+- **`ClaimsMappings`** — Map IdP-specific claim names to canonical `tenantId` claim
+
+Example `appsettings.json`:
+
+```json
+{
+  "Auth": {
+    "IdentityProviders": [
+      {
+        "Name": "Cognito-Default",
+        "Authority": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_abc123XYZ",
+        "Audiences": [ "1a2b3c4d5e6f7g8h9i0j", "2b3c4d5e6f7g8h9i0j1k" ],
+        "ClaimsMappings": {
+          "custom:tenantId": "tenantId"
+        }
+      },
+      {
+        "Name": "EntraID",
+        "Authority": "https://login.microsoftonline.com/12345678-1234-1234-1234-123456789012/v2.0",
+        "Audiences": [ "api://logs2obs" ],
+        "ClaimsMappings": {
+          "extension_tenantId": "tenantId"
+        }
+      }
+    ]
+  }
+}
+```
+
+**OIDC Discovery (automatic):**
+1. ASP.NET Core fetches `{Authority}/.well-known/openid-configuration`
+2. Extracts the JWKS endpoint (`jwks_uri`)
+3. Fetches public signing keys; RS256 asymmetric validation — no secrets stored
+4. Token validation cached; keys refreshed on unknown `kid` (key ID)
+
+**Claims Normalization:**
+The `ClaimsNormalizationMiddleware` maps IdP-specific claim names to canonical names:
+- **Cognito:** `custom:tenantId` → `tenantId`
+- **Entra ID:** `extension_tenantId` → `tenantId`
+- **Okta/Generic:** Custom claim names as needed
+
+#### Cognito-Specific Example
+
+To set up AWS Cognito with logs2obs, deploy the `AuthStack` in your CDK infrastructure:
 
 ```csharp
 // infra/cdk/Stacks/AuthStack.cs (excerpt)
@@ -106,9 +155,7 @@ UserPool = new UserPool(this, "UserPool", new UserPoolProps
 UserPool.AddTrigger(UserPoolOperation.PRE_TOKEN_GENERATION, preTokenGeneration);
 ```
 
-#### Obtaining a JWT Token
-
-Use the AWS Cognito authentication flow to obtain a JWT:
+Obtain a JWT token via AWS Cognito:
 
 ```bash
 # 1. Initiate authentication
@@ -139,6 +186,85 @@ The response contains `IdToken` (use this for API authentication):
 }
 ```
 
+#### Entra ID (Azure AD) Example
+
+Configure Entra ID as a trusted IdP:
+
+```json
+{
+  "Auth": {
+    "IdentityProviders": [
+      {
+        "Name": "EntraID",
+        "Authority": "https://login.microsoftonline.com/12345678-1234-1234-1234-123456789012/v2.0",
+        "Audiences": [ "api://logs2obs" ],
+        "ClaimsMappings": {
+          "extension_tenantId": "tenantId"
+        }
+      }
+    ]
+  }
+}
+```
+
+Obtain a token using the Microsoft identity library or OAuth2 authorization code flow:
+
+```bash
+curl -X POST https://login.microsoftonline.com/12345678-1234-1234-1234-123456789012/oauth2/v2.0/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "client_id=YOUR_CLIENT_ID&scope=api://logs2obs/.default&grant_type=client_credentials&client_secret=YOUR_CLIENT_SECRET"
+```
+
+#### Okta / Generic OIDC Example
+
+Any OIDC-compliant provider (Okta, Auth0, generic OpenID Connect servers) works:
+
+```json
+{
+  "Auth": {
+    "IdentityProviders": [
+      {
+        "Name": "Okta",
+        "Authority": "https://my-org.okta.com",
+        "Audiences": [ "0oa1a2b3c4d5e6f7g8h9" ],
+        "ClaimsMappings": {
+          "org.logs2obs.tenant": "tenantId"
+        }
+      }
+    ]
+  }
+}
+```
+
+#### Multiple Cognito Pools Example
+
+Use `ClaimsMappings` to unify claims across multiple Cognito environments:
+
+```json
+{
+  "Auth": {
+    "IdentityProviders": [
+      {
+        "Name": "Cognito-Dev",
+        "Authority": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_devPool",
+        "Audiences": [ "dev-client-id" ],
+        "ClaimsMappings": {
+          "custom:tenantId": "tenantId"
+        }
+      },
+      {
+        "Name": "Cognito-Prod",
+        "Authority": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_prodPool",
+        "Audiences": [ "prod-client-id" ],
+        "ClaimsMappings": {
+          "custom:tenantId": "tenantId"
+        }
+      }
+    ]
+  }
+}
+```
+
 #### Using a JWT Token
 
 Include the JWT in the `Authorization` header:
@@ -155,6 +281,65 @@ curl -X POST http://localhost:8080/api/v1/query/natural \
 - **Human users** (engineers using the web UI or CLI)
 - **Single-page applications** (React/Vue dashboards)
 - **Administrative operations** (creating API keys, managing pull jobs)
+
+---
+
+### Internal Service Authentication (M2M — Machine-to-Machine)
+
+For service-to-service communication within your infrastructure, use Cognito **client credentials flow** (OAuth2 `client_credentials` grant). This follows Zero Trust principles — services authenticate with their own credentials, never using user tokens.
+
+#### Cognito Client Credentials Setup
+
+Configure a Cognito resource server and service client in CDK:
+
+```csharp
+// In AuthStack.cs
+var resourceServer = UserPool.AddResourceServer("ResourceServer", new UserPoolResourceServerOptions
+{
+    Identifier = "logs2obs-api",
+    Scopes = new[] {
+        new ResourceServerScope { ScopeName = "ingest", ScopeDescription = "Ingest logs" },
+        new ResourceServerScope { ScopeName = "query", ScopeDescription = "Query logs" }
+    }
+});
+
+// Create a machine-to-machine client
+var m2mClient = UserPool.AddClient("M2MClient", new UserPoolClientOptions
+{
+    ClientName = "logs2obs-ingest-worker",
+    AuthFlows = new AuthFlow { ClientCredentials = true },
+    OAuthScopes = new[] { OAuthScope.ResourceServer(resourceServer, new ResourceServerScope { ScopeName = "ingest" }) }
+});
+```
+
+#### Obtaining an M2M Token
+
+```bash
+curl -X POST https://logs2obs.auth.us-east-1.amazoncognito.com/oauth2/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=client_credentials&client_id=YOUR_M2M_CLIENT_ID&client_secret=YOUR_M2M_CLIENT_SECRET&scope=logs2obs-api/ingest"
+```
+
+Response:
+
+```json
+{
+  "access_token": "eyJraWQiOiJ...",
+  "token_type": "Bearer",
+  "expires_in": 3600
+}
+```
+
+#### Using M2M Token for Service-to-Service Calls
+
+```bash
+curl -X POST http://api:8080/api/v1/logs \
+  -H "Authorization: Bearer eyJraWQiOiJ..." \
+  -H "Content-Type: application/json" \
+  -d '{"entries": [...]}'
+```
+
+**Scope verification:** logs2obs validates the `scope` claim in the token; ingest workers must hold `logs2obs-api/ingest` or have API key fallback.
 
 ---
 
