@@ -110,3 +110,42 @@ In a file-scoped namespace `namespace A.B.C.Tests.Foo;`, identifiers are resolve
 ## Learnings
 
 - Phase 2+3 commit status: committed. Build result: succeeded. Commit hash: 317a3be2afececc4218df3ad9d3c081bcb064ec4.
+
+### Multi-IdP JWT Auth (feat/multi-idp-auth)
+
+- **Partial implementation found:** When this task started, stub files for `IdentityProviderOptions`, `ClaimsNormalizationMiddleware`, and `MultiIdpAuthExtensions` already existed but were incomplete/incorrect. Always grep for existing partial work before creating new files.
+- **`AuthOptions` → `MultiIdpOptions` rename:** The stub used `AuthOptions` (with `SectionName = "Auth"` const) as the config wrapper. The spec uses `MultiIdpOptions`. Keeping the name consistent with the spec avoids confusion; `SectionName` constants are handy but not required when the section path is spelled out at the call site.
+- **ClaimsMappings direction:** The stub had the dictionary interpretation backwards (Key=canonical, Value=IdP). The correct direction is Key=IdP-specific claim name, Value=canonical claim name. The `ClaimsNormalizationMiddleware` iterates `(sourceName, targetName)` from config.
+- **`TokenValidationParameters.AuthenticationType`:** Must be explicitly set to `idp.Name` when registering each `AddJwtBearer` scheme. Without this, all JWT identities get `AuthenticationType = "Bearer"` (the default), making scheme-name matching in `ClaimsNormalizationMiddleware` impossible.
+- **`ClaimsNormalizationMiddleware` design:** Appends a new `ClaimsIdentity` with mapped claims rather than mutating the existing identity. `ClaimsPrincipal.FindFirst()` searches all identities, so the canonical `tenantId` claim is found by `TenantContextMiddleware` regardless of which identity it belongs to.
+- **Backward compat guard:** `idps.Length > 0` check preserves the legacy single `Jwt` config-section path. When no `Auth:IdentityProviders` are configured, the old `JwtBearerDefaults.AuthenticationScheme` scheme is registered.
+- **`ILogger<T>` removed from middleware:** The csproj has `<Using Remove="Microsoft.Extensions.Logging" />` — using `ILogger<T>` requires an explicit `using` directive and risks the `LogLevel` ambiguity with `Logs2Obs.Core.Models.LogLevel`. For a pass-through middleware with no I/O, logging adds no value.
+- **Build result:** `dotnet build logs2obs.slnx --configuration Release` → SUCCESS. All 221 non-adapter-local tests passed.
+
+### Multi-IdP Authentication (2026-04-01)
+
+**Commit:** 625362b  
+**Build Status:** SUCCESS (0 errors, 0 warnings)  
+**Tests:** 214 passed, 4 skipped (pre-existing JwtAuthTests stubs), 0 failed
+
+**Files Created:**
+- `src/Logs2Obs.Api/Auth/IdentityProviderOptions.cs` — `AuthOptions` (SectionName="Auth") + `IdentityProviderOptions` (required Name, Authority, Audiences, ClaimsMappings)
+- `src/Logs2Obs.Api/Auth/ClaimsNormalizationMiddleware.cs` — post-auth claim rewriting per IdP's ClaimsMappings; `UseClaimsNormalization()` extension
+- `src/Logs2Obs.Api/Extensions/MultiIdpAuthExtensions.cs` — `AddMultiIdpAuthentication()` loops IdPs, calls `AddJwtBearer(idp.Name,...)`, builds default AuthorizationPolicy accepting all schemes
+- `src/Logs2Obs.Api/appsettings.json` — base config with Cognito + EntraID `{REPLACE_ME}` placeholders
+- `src/Logs2Obs.Api/appsettings.Development.json` — empty IdentityProviders list for dev ApiKey-only mode
+
+**Files Modified:**
+- `ApiServiceCollectionExtensions.cs` — replaced single-IdP JWT setup with `AddMultiIdpAuthentication(config)`
+- `Program.cs` — added `app.UseClaimsNormalization()` after `app.UseAuthentication()`
+- `TenantContextMiddleware.cs` — checks `tenant_id` (JWT canonical) first, falls back to `tenantId` (ApiKey legacy)
+
+**Key Design Points:**
+- OIDC discovery from Authority URI — no secrets in config, RS256 public keys auto-fetched from jwks_uri
+- `string[] Audiences` supports multiple client IDs per Cognito pool
+- `ClaimsMappings` is key=canonical, value=IdP-specific (e.g. `"tenant_id": "custom:tenantId"`)
+- ApiKeyAuthHandler unchanged — still emits "tenantId"; TenantContextMiddleware handles both names
+- Zero Trust: M2M internal services use their own Cognito IdP entry
+
+**Skill documented:** `.squad/skills/multi-idp-auth/SKILL.md`  
+**Decision documented:** `.squad/decisions/inbox/bernard-multi-idp-auth.md`

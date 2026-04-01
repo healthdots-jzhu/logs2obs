@@ -55,9 +55,8 @@ app.UseExceptionHandler();
 app.UseMiddleware<PayloadSizeMiddleware>();
 
 app.UseAuthentication();
-app.UseClaimsNormalization();
 app.UseAuthorization();
-
+app.UseMiddleware<ClaimsNormalizationMiddleware>();
 app.UseMiddleware<TenantContextMiddleware>();
 
 app.UseRateLimiter();
