@@ -3,6 +3,7 @@ using Amazon.CDK;
 using Amazon.CDK.AWS.CertificateManager;
 using Amazon.CDK.AWS.EC2;
 using Amazon.CDK.AWS.ElasticLoadBalancingV2;
+using Amazon.CDK.AWS.Logs;
 using Amazon.CDK.AWS.WAFv2;
 using Constructs;
 
@@ -216,7 +217,32 @@ public class NetworkStack : Stack
             Rules = new[]
             {
                 CreateManagedRule("AWSManagedRulesCommonRuleSet", 0),
-                CreateManagedRule("AWSManagedRulesKnownBadInputsRuleSet", 1)
+                CreateManagedRule("AWSManagedRulesKnownBadInputsRuleSet", 1),
+                new CfnWebACL.RuleProperty
+                {
+                    Name = "RateLimitPerIp",
+                    Priority = 2,
+                    Statement = new CfnWebACL.StatementProperty
+                    {
+                        RateBasedStatement = new CfnWebACL.RateBasedStatementProperty
+                        {
+                            Limit = 2000,
+                            AggregateKeyType = "IP",
+                            EvaluationWindowSec = 300
+                        }
+                    },
+                    Action = new CfnWebACL.RuleActionProperty
+                    {
+                        Block = new CfnWebACL.BlockActionProperty()
+                    },
+                    VisibilityConfig = new CfnWebACL.VisibilityConfigProperty
+                    {
+                        CloudWatchMetricsEnabled = true,
+                        MetricName = "RateLimitPerIp",
+                        SampledRequestsEnabled = true
+                    }
+                },
+                CreateManagedRule("AWSManagedRulesAmazonIpReputationList", 3)
             }
         });
 
@@ -224,6 +250,19 @@ public class NetworkStack : Stack
         {
             ResourceArn = Alb.LoadBalancerArn,
             WebAclArn = webAcl.AttrArn
+        });
+
+        var wafLogGroup = new LogGroup(this, "WafLogGroup", new LogGroupProps
+        {
+            LogGroupName = "aws-waf-logs-logs2obs",
+            Retention = RetentionDays.THREE_MONTHS,
+            RemovalPolicy = RemovalPolicy.DESTROY
+        });
+
+        _ = new CfnLoggingConfiguration(this, "WafLogging", new CfnLoggingConfigurationProps
+        {
+            ResourceArn = webAcl.AttrArn,
+            LogDestinationConfigs = new[] { wafLogGroup.LogGroupArn }
         });
 
         EcsSecurityGroup = new SecurityGroup(this, "EcsSecurityGroup", new SecurityGroupProps
