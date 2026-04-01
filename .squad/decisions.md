@@ -1158,3 +1158,359 @@ Commit 625362b shipped multi-IdP JWT authentication (OIDC-driven, config-based).
 - Implementation: src/Logs2Obs.Api/Auth/IdentityProviderOptions.cs, MultiIdpOptions.cs, ClaimsNormalizationMiddleware.cs
 - Config example: src/Logs2Obs.Api/appsettings.json (Auth.IdentityProviders section)
 - Original feature commit: 625362b
+
+---
+
+# Decision: Security Hardening — ForwardedHeaders, Kestrel Limits, Request Timeouts
+
+# Security Hardening: ForwardedHeaders, Kestrel Limits, Request Timeouts
+
+**Date:** 2026-04-01  
+**Author:** Bernard (Lead & Architect)  
+**Commit:** 29d5df5  
+**Status:** ✅ Implemented
+
+---
+
+## Context
+
+Three ASP.NET Core security hardening items were missing from `Logs2Obs.Api`:
+
+1. **UseForwardedHeaders** — Rate limiter falls back to `RemoteIpAddress` for anonymous/unauthenticated requests, but when behind AWS ALB, ALL traffic arrives from ALB's IP → everything buckets to "unknown"
+2. **Kestrel minimum data rate** — No protection against slow loris / connection exhaustion attacks
+3. **Request timeouts** — No per-endpoint timeout policies → risk of thread pool exhaustion on long-running queries
+
+---
+
+## Decision
+
+Implemented all three hardening items:
+
+### 1. ForwardedHeaders (Fix Anonymous IP Bucketing)
+
+**Configuration (`ApiServiceCollectionExtensions.cs`):**
+```csharp
+services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+    // Trust any RFC1918 address (covers ALB in 10.0.x.x private subnets)
+    options.KnownIPNetworks.Add(new System.Net.IPNetwork(IPAddress.Parse("10.0.0.0"), 8));
+    options.KnownIPNetworks.Add(new System.Net.IPNetwork(IPAddress.Parse("172.16.0.0"), 12));
+    options.KnownIPNetworks.Add(new System.Net.IPNetwork(IPAddress.Parse("192.168.0.0"), 16));
+});
+```
+
+**Middleware (`Program.cs`):**
+```csharp
+app.UseForwardedHeaders();  // FIRST middleware, before UseSerilogRequestLogging()
+```
+
+**Rationale:**
+- ALB is in private subnets (10.0.x.x). Trusting all RFC1918 ranges provides flexibility for future infra changes.
+- Must be FIRST middleware so Serilog, rate limiter, and all downstream middleware see the real client IP.
+
+**Key Quirks:**
+- .NET 10 obsoleted `ForwardedHeadersOptions.KnownNetworks` → `KnownIPNetworks` (ASPDEP PR005 warnings treated as errors).
+- `IPNetwork` ambiguity: both `System.Net.IPNetwork` and `Microsoft.AspNetCore.HttpOverrides.IPNetwork` exist → used fully-qualified `System.Net.IPNetwork`.
+
+---
+
+### 2. Kestrel Minimum Data Rate (Slow Loris Mitigation)
+
+**Configuration (`Program.cs`):**
+```csharp
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MinRequestBodyDataRate = new MinDataRate(
+        bytesPerSecond: 100,
+        gracePeriod: TimeSpan.FromSeconds(10));
+    options.Limits.MinResponseDataRate = new MinDataRate(
+        bytesPerSecond: 100,
+        gracePeriod: TimeSpan.FromSeconds(10));
+    options.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(15);
+    options.Limits.KeepAliveTimeout = TimeSpan.FromSeconds(120);
+});
+```
+
+**Rationale:**
+- 100 bytes/sec minimum prevents slow loris attacks from exhausting connections.
+- 10s grace period allows for legitimate slow starts (e.g., mobile networks).
+- 15s header timeout prevents header-based attacks.
+- 120s keep-alive balances connection reuse vs. resource consumption.
+
+---
+
+### 3. Request Timeouts (Per-Endpoint Timeout Policies)
+
+**Configuration (`ApiServiceCollectionExtensions.cs`):**
+```csharp
+services.AddRequestTimeouts(options =>
+{
+    options.DefaultPolicy = new Microsoft.AspNetCore.Http.Timeouts.RequestTimeoutPolicy 
+        { Timeout = TimeSpan.FromSeconds(5) };
+    options.AddPolicy("IngestTimeout", TimeSpan.FromSeconds(10));
+    options.AddPolicy("QueryTimeout", TimeSpan.FromSeconds(30));
+});
+```
+
+**Middleware (`Program.cs`):**
+```csharp
+app.UseRequestTimeouts();  // After UseExceptionHandler(), before PayloadSizeMiddleware
+```
+
+**Endpoint Decoration:**
+- `LogsEndpoints.cs`: All 3 ingest endpoints → `.WithRequestTimeout("IngestTimeout")` (10s)
+- `QueryEndpoints.cs`: All 8 query endpoints → `.WithRequestTimeout("QueryTimeout")` (30s)
+- Other endpoints: Default 5s policy (automatic)
+
+**Rationale:**
+- Ingest endpoints (POST logs/bulk/metrics) need 10s for large payloads.
+- Query endpoints may execute complex SQL → 30s.
+- 5s default protects all other endpoints (health, auth, etc.).
+- Prevents thread pool exhaustion from runaway requests.
+
+**Key Quirks:**
+- `RequestTimeoutPolicy` required `Microsoft.AspNetCore.Http.Timeouts` using in endpoint files.
+- Used fully-qualified type in DI config to avoid polluting global usings.
+
+---
+
+## Consequences
+
+**Positive:**
+- ✅ Rate limiter now sees real client IPs (not ALB IP) → proper per-IP throttling for anonymous traffic.
+- ✅ Slow loris attacks rejected within 10s → connection exhaustion protection.
+- ✅ All endpoints have bounded execution time → thread pool exhaustion protection.
+- ✅ Query timeouts prevent runaway queries from blocking workers.
+
+**Neutral:**
+- `TreatWarningsAsErrors=true` caught two obsolete API usages → forced to use current .NET 10 APIs.
+- Middleware order now critical: `UseForwardedHeaders()` must be first, `UseRequestTimeouts()` must be before business logic.
+
+**Risks:**
+- If ALB moves to public subnets or a different CIDR, `KnownIPNetworks` must be updated.
+- 30s query timeout may be too short for very complex queries → monitor and adjust if needed.
+- 100 bytes/sec min data rate may reject legitimate slow connections (e.g., satellite) → monitor and adjust if needed.
+
+---
+
+## Files Changed
+
+1. `src/Logs2Obs.Api/DependencyInjection/ApiServiceCollectionExtensions.cs`
+   - Added `ForwardedHeadersOptions` configuration (RFC1918 trust)
+   - Added `AddRequestTimeouts()` with 3 policies
+   - Added usings: `System.Net`, `Microsoft.AspNetCore.HttpOverrides`
+
+2. `src/Logs2Obs.Api/Program.cs`
+   - Added `ConfigureKestrel()` with min data rate limits
+   - Added `app.UseForwardedHeaders()` (FIRST middleware)
+   - Added `app.UseRequestTimeouts()` (after exception handler)
+   - Added using: `Microsoft.AspNetCore.Server.Kestrel.Core`
+
+3. `src/Logs2Obs.Api/Endpoints/LogsEndpoints.cs`
+   - Applied `.WithRequestTimeout("IngestTimeout")` to 3 endpoints
+   - Added using: `Microsoft.AspNetCore.Http.Timeouts`
+
+4. `src/Logs2Obs.Api/Endpoints/QueryEndpoints.cs`
+   - Applied `.WithRequestTimeout("QueryTimeout")` to 8 endpoints
+   - Added using: `Microsoft.AspNetCore.Http.Timeouts`
+
+---
+
+## Testing
+
+- **Build:** `dotnet build --configuration Release` → SUCCESS (0 errors, 0 warnings)
+- **Tests:** `dotnet test --configuration Release --filter "FullyQualifiedName!~Adapters.Local"` → 221 passed, 25 skipped, 0 failed
+
+---
+
+## Next Steps
+
+1. **Monitor ALB access logs** for X-Forwarded-For behavior → confirm real client IPs are being logged.
+2. **Monitor CloudWatch Insights** for rate limiter buckets → confirm per-IP throttling works for anonymous traffic.
+3. **Monitor request timeout metrics** → adjust 30s query timeout if legitimate queries are timing out.
+4. **Consider adding** `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` response headers (item #5 from hardening review).
+5. **Consider adding** HSTS header with `max-age=31536000; includeSubDomains` (item #6 from hardening review).
+
+
+---
+
+# Decision: WAF Security Hardening
+
+# Decision: WAF Security Hardening
+
+**Date:** 2026-03-28  
+**Agent:** Felix (DevOps & Infra)  
+**Status:** Implemented  
+**Commit:** dfc64e1
+
+## Context
+
+The logs2obs infrastructure already had a basic WAF setup with two AWS Managed Rules (CommonRuleSet and KnownBadInputsRuleSet). To improve security posture and operational visibility, we needed additional protection against rate-based attacks and malicious IPs, plus centralized logging.
+
+## Decision
+
+Added two new WAF security rules and enabled CloudWatch logging:
+
+### 1. Rate-Based Rule (Priority 2)
+- **Purpose:** Block IPs making excessive requests (>2,000 requests per 5-minute window)
+- **Implementation:** Custom `CfnWebACL.RuleProperty` with `RateBasedStatement`
+- **Action:** Block (uses `Action` property, not `OverrideAction`, because it's a custom rule)
+- **Parameters:**
+  - Limit: 2000 requests
+  - AggregateKeyType: IP
+  - EvaluationWindowSec: 300 (5 minutes)
+
+### 2. IP Reputation Managed Rule (Priority 3)
+- **Purpose:** Block known malicious IPs from AWS threat intelligence
+- **Implementation:** `AWSManagedRulesAmazonIpReputationList` via existing `CreateManagedRule()` helper
+- **Action:** Uses `OverrideAction: None` (standard for managed rule groups)
+
+### 3. WAF Logging to CloudWatch
+- **LogGroup:** `aws-waf-logs-logs2obs` (must start with `aws-waf-logs-` per AWS requirement)
+- **Retention:** 90 days (`RetentionDays.THREE_MONTHS`)
+- **RemovalPolicy:** DESTROY (dev/test-friendly; change to RETAIN for production)
+- **Implementation:** `CfnLoggingConfiguration` linked to the WebACL ARN
+
+## Rationale
+
+### Why these specific rules?
+- **Rate limiting:** Common protection against scraping, DDoS, and brute-force attacks. 2,000 req/5min threshold is generous for legitimate API usage but catches abusive patterns.
+- **IP reputation:** Zero-effort defense against known bad actors. AWS continuously updates this list based on threat intelligence.
+
+### Why CloudWatch Logs?
+- Centralized visibility for security events
+- Integration with CloudWatch Insights for analysis
+- Supports downstream SIEM integration if needed
+- 90-day retention balances cost vs. compliance needs
+
+### Rule priority order
+Final rule order (0-3):
+0. CommonRuleSet (general web exploits)
+1. KnownBadInputsRuleSet (SQL injection, XSS)
+2. RateLimitPerIp (custom rate-based)
+3. IpReputationList (known bad IPs)
+
+Priority order ensures broad protections run first, then more specific/performance-sensitive rules.
+
+## Alternatives Considered
+
+### Use AWS WAF rate-based rule from console
+- **Rejected:** Infrastructure-as-code is a project principle. No manual steps.
+
+### Use different rate limit (e.g., 1000 or 5000)
+- **Rationale for 2000:** Balances protection vs. false positives. A legitimate user making 1 query/sec would hit 300 req/5min. 2000 allows bursts and parallel clients.
+
+### Use AWS WAF Full Logs (S3)
+- **Rejected for now:** CloudWatch Logs sufficient for initial visibility. S3 logging adds cost and requires separate Athena queries. Can add later if log volume becomes problematic.
+
+### Use different retention (30, 180, 365 days)
+- **90 days chosen:** Standard security log retention for incident investigation. Adjust based on compliance requirements.
+
+## Implementation Notes
+
+### CDK-specific details
+- Added `using Amazon.CDK.AWS.Logs` to import CloudWatch Logs constructs
+- `RetentionDays.THREE_MONTHS` is the correct enum value (not `NINETY_DAYS`)
+- `CfnLoggingConfiguration` and `CfnLoggingConfigurationProps` are in `Amazon.CDK.AWS.WAFv2` namespace
+
+### Build verification
+- Verified with `dotnet build` in `infra/cdk/` directory
+- No compile errors or warnings
+- CDK project opts out of Directory.Build.props via `<ImportDirectoryBuildProps>false</ImportDirectoryBuildProps>`, so TreatWarningsAsErrors doesn't apply
+
+## Impact
+
+### Security improvements
+- **DDoS mitigation:** Rate-based rule limits impact of simple volumetric attacks
+- **Threat intelligence:** IP reputation blocks known malicious sources
+- **Visibility:** WAF logs enable forensic analysis and alerting
+
+### Operational impact
+- **Cost:** Minimal (CloudWatch Logs storage for 90 days)
+- **Performance:** WAF rules have negligible latency impact
+- **Monitoring:** WAF metrics visible in CloudWatch (MetricName properties set for all rules)
+
+### Future considerations
+- Monitor rate-limit false positives; adjust threshold if needed
+- Consider adding geo-blocking rules if attack patterns emerge from specific regions
+- Evaluate S3 logging if CloudWatch Logs costs become significant
+- Add CloudWatch Alarms for `RateLimitPerIp` blocks to detect attacks
+
+## Related Files
+
+- `infra/cdk/Stacks/NetworkStack.cs` — WAF configuration
+- `docs/security.md` — Security documentation (should be updated with WAF details)
+- `.squad/agents/felix/history.md` — Updated with this work
+
+## Open Questions
+
+None. Changes are production-ready pending CDK deployment.
+
+
+---
+
+# Decision: Public API Security Hardening for logs2obs
+
+# Decision: Public API Security Hardening for logs2obs
+
+**Author:** Bernard (Lead & Architect)  
+**Date:** 2026-04-01  
+**Requested by:** Jason Zhu  
+**Status:** Recommendations — not yet actioned  
+
+---
+
+## Context
+
+Following the fix to wire `RateLimiterOptions` from configuration (commit 3bc9cfe), Jason requested a structured review of what additional protections a public-facing API service like logs2obs requires — with specific emphasis on DDoS.
+
+---
+
+## Key Findings
+
+| Concern | Current State | Recommendation |
+|---|---|---|
+| **DDoS — L3/L4** | ✅ AWS Shield Standard is automatic for all ALB endpoints. NetworkStack uses ALB (not direct ECS exposure). | Evaluate Shield Advanced for volumetric flood protection and cost protection. Shield Standard alone will not absorb a sustained multi-Gbps attack. |
+| **DDoS — L7 (application layer)** | ✅ WAF in NetworkStack with `AWSManagedRulesCommonRuleSet` + `AWSManagedRulesKnownBadInputsRuleSet`. Rate-based WAF rules are **not** configured. | Add a WAF rate-based rule (e.g., 2000 req/5min per IP) as a coarse L7 throttle before requests reach the app. This is the cheapest DDoS mitigation layer. |
+| **IP-based throttling / anonymous fallback** | ⚠️ Partial. `TenantRateLimiterExtensions` falls back to `RemoteIpAddress` when `tenantId` is missing, but this is `"unknown"` when behind ALB (X-Forwarded-For not read). | Read the real client IP from `X-Forwarded-For` using `app.UseForwardedHeaders()` with `KnownProxies` set to the ALB CIDR. Without this, all unauthenticated traffic shares one `"unknown"` bucket. |
+| **Payload size limits** | ✅ `PayloadSizeMiddleware` enforces 10 MB limit on `/api/v1/logs` (config-driven via `PayloadSize:MaxPayloadBytes`). | Extend the check to all endpoints or use `RequestSizeLimitAttribute` on individual endpoints. gRPC ingest path may also need max-message-size configuration. |
+| **HTTPS / TLS enforcement** | ✅ ALB has port 80 → 443 redirect (HTTP 301) and ACM certificate. ECS only exposes port 8080 internally (ALB→ECS). | Add `app.UseHsts()` + `builder.Services.AddHsts(o => o.MaxAge = TimeSpan.FromDays(365))` in Program.cs for defense-in-depth (HSTS preload). Currently absent from the app layer. |
+| **HTTP security headers** | ❌ Missing. No `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, or `Content-Security-Policy` are set in the app or at the ALB level. | Add a small `SecurityHeadersMiddleware` or configure response headers at the ALB/WAF level. Minimum: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`. CSP is less critical for a pure API, but still good hygiene. |
+| **Request timeout limits** | ❌ Missing. ASP.NET Core has no global request timeout configured; ECS task container has no explicit connection drain timeout either. | Add `builder.Services.AddRequestTimeouts()` (ASP.NET Core 8+) with a sensible global default (e.g., 30 s for query, 10 s for ingest). Without this, a slow client can hold a thread indefinitely. |
+| **Slow loris / connection exhaustion** | ⚠️ Partial. Kestrel has default keep-alive and header timeout limits but they are not explicitly tuned. No minimum request body rate configured. | Set `KestrelServerOptions.Limits.MinRequestBodyDataRate` and `MinResponseDataRate`. For public ingestion endpoints, a 100 bytes/sec minimum with a 5-second grace period is a reasonable floor. |
+| **WAF** | ✅ `CfnWebACL` with `AWSManagedRulesCommonRuleSet` + `AWSManagedRulesKnownBadInputsRuleSet` attached to ALB in NetworkStack. | Add `AWSManagedRulesBotControlRuleSet` (optional, adds cost) and a **rate-based rule** (see DDoS L7 above). Also enable WAF logging to CloudWatch/S3 for anomaly analysis. |
+| **Geo-blocking / IP allowlisting for ingestion** | ❌ Missing. All IPv4 is allowed to port 443 on the ALB SG. | For the ingest endpoint specifically, consider: (a) WAF geo-match rule to block high-risk regions, or (b) if customers are enterprise, enforce per-tenant source IP allowlists via WAF IP sets. Low-cost first step: add a WAF rule that applies `AWSManagedRulesAmazonIpReputationList`. |
+| **Circuit breakers for downstream dependencies** | ✅ Partially. `ResiliencePipelines.cs` (Polly 8) defines `ForExternalIo`, `ForSearch`, `ForStorage` pipelines with retry + circuit breaker. | Verify all handlers actually use these pipelines. A broken OpenSearch connection under load must not cascade into a thread-pool exhaustion. Confirm circuit breaker state is exposed via the `/metrics` Prometheus endpoint for alerting. |
+| **Observability for anomaly detection** | ✅ OpenTelemetry tracing + metrics, Serilog request logging, Prometheus scraping endpoint at `/metrics`, WAF CloudWatch metrics enabled. | Hook WAF metrics to a CloudWatch Alarm that fires on `BlockedRequests` spike. Add a custom `rate_limit_rejections_total` counter metric inside `TenantRateLimiterExtensions` using `IMetricsFactory` so per-tenant throttling is visible in dashboards. |
+| **API versioning for graceful deprecation** | ⚠️ Partial. Routes use `/api/v1/` prefix by convention but there is no formal `Asp.Versioning` package or sunset header strategy. | Add `Asp.Versioning.Http` to emit `api-deprecated-date` and `Sunset` response headers. Under an active attack, being able to deprecate and sunset a specific API version without taking down the whole service is operationally critical. |
+
+---
+
+## Priority Order
+
+1. **WAF rate-based rule** — 30-minute config change, biggest DDoS bang-for-buck.  
+2. **`UseForwardedHeaders`** — code fix, required to make IP-based fallback bucketing correct.  
+3. **Kestrel min data rate** — code fix, defends against slow loris.  
+4. **Request timeouts** — code fix, prevents thread exhaustion from slow clients.  
+5. **Security headers middleware** — code fix, low effort, baseline hygiene.  
+6. **HSTS** — one-line code change, enables browser preload protection.  
+7. **WAF logging + CloudWatch Alarm** — infra change, closes observability gap on blocked requests.  
+8. **WAF `AWSManagedRulesAmazonIpReputationList`** — infra change, blocks known malicious IPs with zero false positives.  
+9. **Shield Advanced** — cost/risk decision for Jason; revisit at GA.
+
+---
+
+## What Is Already Solid
+
+- Tenant-aware rate limiting (token bucket for ingest, sliding window for query) — now config-driven ✅  
+- Per-request payload size enforcement (10 MB, configurable) ✅  
+- JWT multi-IdP authentication with TenantId-from-auth-context only ✅  
+- WAF with AWS managed rule sets attached to ALB ✅  
+- HTTP→HTTPS redirect at ALB ✅  
+- ACM certificate (DNS-validated) ✅  
+- OTel + Serilog + Prometheus metrics pipeline ✅  
+- Polly circuit breakers on all external I/O ✅  
+

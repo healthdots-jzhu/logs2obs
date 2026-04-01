@@ -168,3 +168,28 @@ MinIO:9000/9001, RabbitMQ:5672/15672, PostgreSQL:5432, Redis:6379, Meilisearch:7
 
 
 
+
+### 2026-04-01: WAF Security Hardening — Rate Limits, IP Reputation, CloudWatch Logging
+
+**Commit:** dfc64e1
+
+**Implemented in infra/cdk/Stacks/NetworkStack.cs:**
+1. **Rate-based WAF rule** — Blocks IPs with >2,000 requests in 5-minute window. Provides L7 DDoS mitigation before requests reach app.
+2. **IP reputation managed rule** — Integrated AWSManagedRulesAmazonIpReputationList to block known malicious IPs from AWS threat intelligence.
+3. **WAF CloudWatch logging** — Centralized logging to aws-waf-logs-logs2obs with 90-day retention for security event visibility and forensic analysis.
+
+**WAF Rule Priority Order (0-3):**
+- Priority 0: CommonRuleSet (general web exploits)
+- Priority 1: KnownBadInputsRuleSet (SQL injection, XSS)
+- Priority 2: RateLimitPerIp (custom rate-based)
+- Priority 3: IpReputationList (known bad IPs)
+
+**Build verification:**
+- CDK build: No errors or warnings ✅
+
+**Key decisions:**
+- 2,000 req/5min threshold balances DDoS protection vs. legitimate API usage
+- CloudWatch Logs chosen over S3 for initial phase
+- 90-day retention aligns with standard security audit requirements
+
+**Next monitoring:** Hook WAF BlockedRequests metric to CloudWatch Alarm for attack detection.

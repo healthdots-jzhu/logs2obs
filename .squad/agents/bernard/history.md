@@ -217,3 +217,26 @@ In a file-scoped namespace `namespace A.B.C.Tests.Foo;`, identifiers are resolve
 **Security impact:** Rate limiter now sees real client IPs (not ALB IP), slow clients are rejected within 10s, queries time out at 30s max (prevents thread pool exhaustion).
 
 **Decision documented:** `.squad/decisions/inbox/bernard-security-hardening.md`
+
+### 2026-04-01: API Security Hardening — ForwardedHeaders, Kestrel, Request Timeouts
+
+**Commit:** 29d5df5
+
+**Implemented:**
+1. **UseForwardedHeaders middleware** — Reads X-Forwarded-For from AWS ALB, trusts RFC1918 CIDR ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16). Fixes rate limiter IP bucketing for anonymous traffic.
+2. **Kestrel minimum data rate limits** — Set MinRequestBodyDataRate to 100 bytes/sec with 10s grace period + RequestHeadersTimeout 15s. Defends against slow loris attacks.
+3. **Per-endpoint request timeouts** — Added 10s for ingest, 30s for query, 5s default to prevent thread pool exhaustion.
+
+**Build & Tests:**
+- Build: 0 errors, 0 warnings ✅
+- Tests: 221 passed, 25 skipped, 0 failed ✅
+
+**Files modified:**
+- src/Logs2Obs.Api/DependencyInjection/ApiServiceCollectionExtensions.cs
+- src/Logs2Obs.Api/Program.cs
+- src/Logs2Obs.Api/Endpoints/LogsEndpoints.cs
+- src/Logs2Obs.Api/Endpoints/QueryEndpoints.cs
+
+**Key decision:** Middleware order is critical — UseForwardedHeaders() must be first (before Serilog + rate limiter) so all downstream middleware sees the real client IP.
+
+**Next monitoring:** Verify real client IPs in ALB access logs and CloudWatch Insights rate limiter metrics.
