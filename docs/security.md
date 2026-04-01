@@ -847,17 +847,313 @@ The CDK `AuthStack` does not create this role automatically — create it manual
 
 ### WAF Rules
 
-The `NetworkStack` attaches a Web ACL with these managed rule groups:
+The `NetworkStack` attaches a Web ACL with these rule groups and custom rules:
 
 ```csharp
+// Priority 0: AWS Common Rule Set
 CreateManagedRule("AWSManagedRulesCommonRuleSet", 0),
-CreateManagedRule("AWSManagedRulesKnownBadInputsRuleSet", 1)
+
+// Priority 1: Known Bad Inputs Rule Set
+CreateManagedRule("AWSManagedRulesKnownBadInputsRuleSet", 1),
+
+// Priority 2: Rate-based rule (see Infrastructure Security section)
+// Priority 3: IP Reputation List (see Infrastructure Security section)
 ```
 
-**Additional Custom Rules (recommended):**
-- Rate limiting: 2,000 requests/5 minutes per IP
-- Geo-blocking: block traffic from untrusted countries
-- IP allowlist: restrict administrative endpoints to corporate VPN
+---
+
+## 6a. Infrastructure Security (AWS WAF)
+
+### ForwardedHeaders Middleware (X-Forwarded-For / X-Forwarded-Proto)
+
+When logs2obs is deployed behind an AWS Application Load Balancer (ALB), the ALB proxies traffic to ECS Fargate tasks. Without proper header forwarding, the API sees all requests as coming from the ALB's internal IP instead of the actual client IP.
+
+**Configuration (ASP.NET Core Program.cs):**
+
+```csharp
+// UseForwardedHeaders MUST be the FIRST middleware in the pipeline
+var forwardedHeadersOptions = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+    // Trust only RFC 1918 private ranges (ALB's subnet)
+    AllowedHosts = null,  // Allow all hosts; filtering done by IP ranges
+    TrustedProxies = null,  // We use networks instead
+    TrustedNetworks = new()
+    {
+        System.Net.IPNetwork.Parse("10.0.0.0/8"),        // Class A private
+        System.Net.IPNetwork.Parse("172.16.0.0/12"),     // Class B private
+        System.Net.IPNetwork.Parse("192.168.0.0/16")     // Class C private
+    }
+};
+
+app.UseForwardedHeaders(forwardedHeadersOptions);
+// ... rest of middleware pipeline
+```
+
+**Why This Matters:**
+
+Without `UseForwardedHeaders()`, the rate limiter buckets all anonymous traffic under the ALB's internal IP (e.g., 10.0.10.5). This defeats per-client-IP rate limiting — a single aggressive client can effectively exhaust the entire tenant's rate limit quota by appearing as multiple "tenants" through the same IP.
+
+**Result with proper configuration:**
+- Client 192.168.1.100 makes 100 requests → rate limiter sees 100 from 192.168.1.100
+- Client 192.168.1.101 makes 50 requests → rate limiter sees 50 from 192.168.1.101
+- Both stay within per-client limits even if the ALB processes them
+
+**Result without `UseForwardedHeaders()` (INCORRECT):**
+- Client 192.168.1.100 + 192.168.1.101 both appear as ALB IP 10.0.10.5
+- Rate limiter sees 150 requests from 10.0.10.5
+- Single aggressive client can consume entire tenant quota
+
+---
+
+### WAF Rate-Based Rule (L7 DDoS Protection)
+
+A custom WAF rate-based rule at **priority 2** blocks IP addresses that exceed a threshold:
+
+```csharp
+// infra/cdk/Stacks/NetworkStack.cs
+new RateBasedStatementProperty
+{
+    Limit = 2000,  // requests
+    AggregateKeyType = "IP",
+    ScopeDownStatement = null  // Apply to all traffic
+}
+```
+
+**Action:** `Block` — matching requests receive HTTP 403 Forbidden
+
+**Window:** 5 minutes
+
+**Why:** Mitigates Layer 7 (application-layer) DDoS attacks where an attacker floods the ALB with legitimate-looking HTTP requests. The rate-based rule catches patterns that individual WAF managed rules might miss.
+
+**Behavior:**
+- IP making 2,001+ requests in 5 minutes → blocked for remainder of window
+- IP making <2,000 requests in 5 minutes → allowed
+- Block status resets every 5 minutes
+
+---
+
+### AWS Managed IP Reputation List (Priority 3)
+
+The WAF also applies AWS Managed Rules IP Reputation List at **priority 3**:
+
+```csharp
+new ManagedRuleGroupStatementProperty
+{
+    Name = "AWSManagedRulesAmazonIpReputationList",
+    VendorName = "AWS",
+}
+```
+
+**Data Source:** AWS threat intelligence feed — blocks IPs known to be:
+- Hosting malware
+- Operating botnets
+- Recently compromised
+- Performing credential stuffing
+- Engaging in scanning/reconnaissance
+
+**Action:** `Block` — requests from reputation-listed IPs are rejected before reaching the application
+
+**Advantage over rate-based rule:** Catches bad actors on first request, before they accumulate rate-limit violations.
+
+---
+
+### WAF Logging
+
+All WAF activity is logged to CloudWatch Logs for auditing and troubleshooting:
+
+```csharp
+// infra/cdk/Stacks/NetworkStack.cs
+var wafLogGroup = new LogGroup(this, "WafLogGroup", new LogGroupProps
+{
+    LogGroupName = "aws-waf-logs-logs2obs",
+    Retention = RetentionDays.NINETY_DAYS,
+    RemovalPolicy = RemovalPolicy.RETAIN
+});
+
+webAcl.LoggingConfiguration = new LoggingConfigurationProperty
+{
+    ResourceArn = webAcl.AttrArn,
+    LogDestinationConfigs = new[] { wafLogGroup.LogGroupArn }
+};
+```
+
+**Log Entry Example:**
+```json
+{
+  "timestamp": 1711279200,
+  "formatversion": 1,
+  "webaclid": "arn:aws:wafv2:us-east-1:123456789012:regional/webacl/logs2obs/a1b2c3d4",
+  "terminatingruleid": "RateBasedRule",
+  "terminatingruletype": "RATE_BASED",
+  "action": "BLOCK",
+  "httpsourcename": "CF",
+  "httpsourceid": "example-distribution",
+  "rulegrouplist": [],
+  "httprequest": {
+    "clientip": "203.0.113.42",
+    "country": "US",
+    "method": "POST",
+    "uri": "/api/v1/logs",
+    "args": "",
+    "httpversion": "HTTP/2.0",
+    "headers": [
+      { "name": "Host", "value": "logs.example.com" }
+    ]
+  }
+}
+```
+
+**Query blocked logs in CloudWatch:**
+```bash
+aws logs filter-log-events \
+  --log-group-name aws-waf-logs-logs2obs \
+  --filter-pattern '{ $.action = "BLOCK" }' \
+  --start-time $(date -d '1 hour ago' +%s)000 \
+  --query 'events[*].message' | jq
+```
+
+---
+
+## 6b. Application-Layer Hardening
+
+### Kestrel Minimum Data Rate (Slow Loris Mitigation)
+
+Kestrel (the ASP.NET Core HTTP server) enforces minimum data rate thresholds to prevent **slow loris** attacks where attackers hold connections open by sending data very slowly or not at all.
+
+**Configuration (Program.cs or appsettings.json):**
+
+```csharp
+app.UseKestrel(options =>
+{
+    // Request body must arrive at minimum 100 bytes/sec
+    options.Limits.MinRequestBodyDataRate = new MinDataRate(
+        bytesPerSecond: 100,
+        gracePeriod: TimeSpan.FromSeconds(10)
+    );
+
+    // Response body must be sent at minimum 100 bytes/sec
+    options.Limits.MinResponseDataRate = new MinDataRate(
+        bytesPerSecond: 100,
+        gracePeriod: TimeSpan.FromSeconds(10)
+    );
+
+    // Headers must be sent within 15 seconds
+    options.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(15);
+
+    // Keep-alive connections timeout after 120 seconds
+    options.Limits.KeepAliveTimeout = TimeSpan.FromSeconds(120);
+});
+```
+
+**What each parameter does:**
+
+| Parameter | Value | Purpose |
+|-----------|-------|---------|
+| `MinRequestBodyDataRate` | 100 bytes/sec | Rejects uploads slower than 100 B/s (grace: 10s for TLS negotiation) |
+| `MinResponseDataRate` | 100 bytes/sec | Closes connections if response slower than 100 B/s (grace: 10s) |
+| `RequestHeadersTimeout` | 15 seconds | HTTP headers must arrive within 15s; prevents header flooding |
+| `KeepAliveTimeout` | 120 seconds | Idle connections close after 2 minutes (vs. indefinite hold) |
+
+**Slow Loris Attack Scenario (WITHOUT these limits):**
+
+1. Attacker opens 10,000 connections to the server
+2. Each sends 1 byte of HTTP header per 30 seconds
+3. Connections never complete, server thread pool exhausted
+4. Legitimate requests timeout
+5. Server crashes or becomes unresponsive
+
+**Slow Loris Attack Scenario (WITH Kestrel limits):**
+
+1. Attacker opens 10,000 connections, each sends 1 byte per 30 seconds
+2. After 10 seconds of grace, Kestrel drops connection (rate < 100 bytes/sec)
+3. Thread released for legitimate requests
+4. Attack fails
+
+**Monitoring:**
+
+Add metrics to track dropped connections:
+
+```csharp
+// Logs appear as:
+// warn: Microsoft.AspNetCore.Server.Kestrel[13]
+// Connection from 203.0.113.42 was closed because the inactivity timer expired.
+```
+
+---
+
+### Request Timeouts (Runaway Query Prevention)
+
+ASP.NET Core Request Timeouts middleware prevents long-running requests from exhausting the thread pool. Different timeout policies apply to different endpoint categories based on expected latency:
+
+**Configuration (Program.cs):**
+
+```csharp
+app.UseRequestTimeouts();
+
+// Default policy: 5 seconds (most endpoints)
+app.MapRequestTimeouts(new RequestTimeoutPolicy
+{
+    TimeoutDuration = TimeSpan.FromSeconds(5)
+});
+
+// Ingest policy: 10 seconds (allows batch processing)
+var ingestPolicy = new RequestTimeoutPolicy
+{
+    TimeoutDuration = TimeSpan.FromSeconds(10)
+};
+app.MapPost("/api/v1/logs", PostLogs).WithRequestTimeout(ingestPolicy);
+
+// Query policy: 30 seconds (allows complex searches)
+app.MapPost("/api/v1/query/sql", QuerySql).WithRequestTimeout(new RequestTimeoutPolicy
+{
+    TimeoutDuration = TimeSpan.FromSeconds(30)
+});
+app.MapPost("/api/v1/query/natural", QueryNatural).WithRequestTimeout(new RequestTimeoutPolicy
+{
+    TimeoutDuration = TimeSpan.FromSeconds(30)
+});
+```
+
+**Timeout Response (HTTP 408):**
+
+```json
+{
+  "error": "RequestTimeout",
+  "message": "The request exceeded the timeout duration of 5 seconds.",
+  "code": 408
+}
+```
+
+**Why Per-Endpoint Policies?**
+
+Different operations have different latency profiles:
+
+| Endpoint | Operation | Typical Latency | Policy Timeout |
+|----------|-----------|---|---|
+| `POST /api/v1/logs` | Ingest batch (100-1000 logs) | 2-8 sec | 10 sec |
+| `POST /api/v1/query/sql` | Complex search + aggregation | 5-25 sec | 30 sec |
+| `POST /api/v1/query/natural` | AI-generated query + execution | 10-25 sec | 30 sec |
+| `GET /health/ready` | Health check | <100 ms | 5 sec (default) |
+| `POST /api/v1/auth/keys` | Create API key | <500 ms | 5 sec (default) |
+
+**Runaway Query Scenario (WITHOUT timeouts):**
+
+1. User submits `SELECT * FROM huge_table` without LIMIT
+2. Query takes 15 minutes scanning millions of rows
+3. Request holds thread pool slot for 15 minutes
+4. Other requests queue up behind it
+5. Eventually, entire thread pool exhausted
+6. Server stops accepting new connections
+
+**Runaway Query Scenario (WITH 30-second timeout):**
+
+1. User submits same query
+2. After 30 seconds, request aborts with 408 Timeout
+3. Thread released immediately
+4. User receives clear error: "Query exceeded 30-second timeout"
+5. User optimizes query (adds LIMIT, filters by date range)
+6. Other requests unaffected
 
 ---
 
