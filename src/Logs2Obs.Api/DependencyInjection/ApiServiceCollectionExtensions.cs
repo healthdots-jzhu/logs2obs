@@ -44,6 +44,13 @@ public static class ApiServiceCollectionExtensions
             options.AddPolicy("QueryTimeout", TimeSpan.FromSeconds(30));
         });
 
+        services.AddHsts(options =>
+        {
+            options.MaxAge = TimeSpan.FromDays(365);
+            options.IncludeSubDomains = true;
+            options.Preload = false; // Don't preload until domain is stable in production
+        });
+
         services.AddMemoryCache();
 
         var multiIdp = config.GetSection("Auth").Get<MultiIdpOptions>() ?? new MultiIdpOptions();

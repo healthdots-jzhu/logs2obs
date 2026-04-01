@@ -63,6 +63,13 @@ var app = builder.Build();
 
 app.UseForwardedHeaders();
 
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+}
+
+app.UseMiddleware<SecurityHeadersMiddleware>();
+
 app.UseSerilogRequestLogging();
 
 app.UseExceptionHandler();
