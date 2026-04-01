@@ -117,3 +117,15 @@ MinIO:9000/9001, RabbitMQ:5672/15672, PostgreSQL:5432, Redis:6379, Meilisearch:7
 - Deploy workflow requires GitHub secrets: `AWS_REGION`, `AWS_ROLE_TO_ASSUME`, `ECR_REGISTRY`
 - ECS cluster and service names hardcoded: `logs2obs-cluster`, `logs2obs-{api|worker|puller|queryengine}`
 
+### 2026-03-28: Multi-IdP JWT Authentication Documentation
+- Updated `docs/security.md` — JWT Auth section renamed to "Multi-IdP" with comprehensive OIDC guidance
+- Added new subsection "Multi-IdP Configuration" explaining config-driven IdP registration
+- Documented `IdentityProviderOptions` (Name, Authority, Audiences[], ClaimsMappings)
+- Added JSON examples for AWS Cognito, Microsoft Entra ID, Okta/generic OIDC, and multiple Cognito pools
+- Explained OIDC discovery mechanism (auto-fetch public keys via `.well-known/openid-configuration`)
+- Added new subsection "Internal Service Authentication (M2M)" for service-to-service Zero Trust pattern using Cognito client credentials flow
+- Updated `docs/api-reference.md` — JWT Bearer Token section now IdP-agnostic; clarifies any OIDC provider works
+- Reflected implementation: `ClaimsNormalizationMiddleware` maps IdP-specific claims to canonical `tenantId`
+- Backward compat: legacy `Jwt` section still works if `Auth:IdentityProviders` empty
+- Commit: 4ba2ba0
+
