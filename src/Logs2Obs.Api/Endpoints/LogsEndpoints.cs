@@ -53,7 +53,7 @@ public static class LogsEndpoints
         {
             accepted = result.Accepted,
             rejected = result.Rejected,
-            requestId = Guid.NewGuid().ToString()
+            requestId = result.BatchId
         });
     }
 
@@ -102,7 +102,7 @@ public static class LogsEndpoints
             accepted = result.Accepted,
             rejected = result.Rejected,
             totalLines = entries.Count,
-            requestId = Guid.NewGuid().ToString()
+            requestId = result.BatchId
         });
     }
 
@@ -124,7 +124,7 @@ public static class LogsEndpoints
         {
             accepted = result.Accepted,
             rejected = result.Rejected,
-            requestId = Guid.NewGuid().ToString()
+            requestId = result.BatchId
         });
     }
 }

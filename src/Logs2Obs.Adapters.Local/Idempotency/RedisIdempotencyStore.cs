@@ -8,11 +8,11 @@ using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 
 public sealed class RedisIdempotencyStore(
+    IConnectionMultiplexer connection,
     IOptions<RedisOptions> options,
     ILogger<RedisIdempotencyStore>? logger = null) : IIdempotencyStore
 {
-    private readonly IDatabase _db = ConnectionMultiplexer
-        .Connect(options.Value.ConnectionString).GetDatabase();
+    private readonly IDatabase _db = connection.GetDatabase();
     private readonly string _prefix = $"{options.Value.InstanceName}idem:";
     private readonly ILogger<RedisIdempotencyStore> _logger =
         logger ?? NullLogger<RedisIdempotencyStore>.Instance;

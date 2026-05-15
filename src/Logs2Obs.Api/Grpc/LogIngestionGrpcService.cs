@@ -23,7 +23,7 @@ public sealed class LogIngestionGrpcService : LogIngestionService.LogIngestionSe
         ServerCallContext context)
     {
         var tenantId = ExtractTenantId(request, context);
-        var entries = request.Entries.Select(MapToDto).ToList();
+        var entries = MapEntries(request);
 
         var command = new IngestLogsCommand
         {
@@ -40,7 +40,7 @@ public sealed class LogIngestionGrpcService : LogIngestionService.LogIngestionSe
         {
             Accepted = result.Accepted,
             Rejected = result.Rejected,
-            RequestId = Guid.NewGuid().ToString()
+            RequestId = result.BatchId
         };
     }
 
@@ -54,7 +54,10 @@ public sealed class LogIngestionGrpcService : LogIngestionService.LogIngestionSe
         await foreach (var request in requestStream.ReadAllAsync(context.CancellationToken))
         {
             tenantId ??= ExtractTenantId(request, context);
-            allEntries.AddRange(request.Entries.Select(MapToDto));
+            foreach (var entry in request.Entries)
+            {
+                allEntries.Add(MapToDto(entry));
+            }
         }
 
         if (string.IsNullOrWhiteSpace(tenantId))
@@ -77,7 +80,7 @@ public sealed class LogIngestionGrpcService : LogIngestionService.LogIngestionSe
         {
             Accepted = result.Accepted,
             Rejected = result.Rejected,
-            RequestId = Guid.NewGuid().ToString()
+            RequestId = result.BatchId
         };
     }
 
@@ -89,7 +92,7 @@ public sealed class LogIngestionGrpcService : LogIngestionService.LogIngestionSe
         await foreach (var request in requestStream.ReadAllAsync(context.CancellationToken))
         {
             var tenantId = ExtractTenantId(request, context);
-            var entries = request.Entries.Select(MapToDto).ToList();
+            var entries = MapEntries(request);
 
             var command = new IngestLogsCommand
             {
@@ -102,7 +105,7 @@ public sealed class LogIngestionGrpcService : LogIngestionService.LogIngestionSe
             {
                 Accepted = result.Accepted,
                 Rejected = result.Rejected,
-                RequestId = Guid.NewGuid().ToString()
+                RequestId = result.BatchId
             }, context.CancellationToken);
 
             _logger.LogDebug(
@@ -116,6 +119,17 @@ public sealed class LogIngestionGrpcService : LogIngestionService.LogIngestionSe
         var metadataTenantId = context.RequestHeaders.GetValue("x-tenant-id");
         return metadataTenantId ?? request.TenantId ?? throw new RpcException(
             new Status(StatusCode.InvalidArgument, "Missing tenant ID"));
+    }
+
+    private static List<LogEntryDto> MapEntries(IngestLogRequest request)
+    {
+        var entries = new List<LogEntryDto>(request.Entries.Count);
+        foreach (var entry in request.Entries)
+        {
+            entries.Add(MapToDto(entry));
+        }
+
+        return entries;
     }
 
     private static LogEntryDto MapToDto(LogEntryProto proto)

@@ -10,12 +10,10 @@ using System.Diagnostics;
 
 public class IngestLogsHandler(
     IMessageBus messageBus,
-    IIdempotencyStore idempotencyStore,
     ILogger<IngestLogsHandler> logger)
     : IRequestHandler<IngestLogsCommand, IngestLogsResult>
 {
     private readonly IMessageBus _messageBus = messageBus;
-    private readonly IIdempotencyStore _idempotencyStore = idempotencyStore;
     private readonly ILogger<IngestLogsHandler> _logger = logger;
 
     public async Task<IngestLogsResult> Handle(IngestLogsCommand command, CancellationToken ct)
@@ -25,28 +23,13 @@ public class IngestLogsHandler(
             command.Entries.Count, command.TenantId, batchId);
 
         var sw = Stopwatch.StartNew();
-        var validEntries = new List<LogEntry>();
-        var duplicateCount = 0;
+        var validEntries = new List<LogEntry>(command.Entries.Count);
 
         foreach (var dto in command.Entries)
         {
             try
             {
                 var entry = DtoMapper.ToDomain(dto, command.TenantId, command.IngestionMode);
-                
-                var idempotencyKey = $"ingest:{entry.Id}";
-                var isNew = await _idempotencyStore.CheckAndSetAsync(
-                    idempotencyKey,
-                    TimeSpan.FromHours(24),
-                    ct);
-
-                if (!isNew)
-                {
-                    duplicateCount++;
-                    _logger.LogDebug("Duplicate entry {EntryId} skipped", entry.Id);
-                    continue;
-                }
-
                 validEntries.Add(entry);
             }
             catch (Exception ex)
@@ -58,10 +41,10 @@ public class IngestLogsHandler(
         if (validEntries.Count == 0)
         {
             _logger.LogWarning("No valid entries to ingest for tenant {TenantId}", command.TenantId);
-            return new IngestLogsResult(0, command.Entries.Count - duplicateCount, batchId);
+            return new IngestLogsResult(0, command.Entries.Count, batchId);
         }
 
-        var batch = validEntries.AsReadOnly();
+        IReadOnlyList<LogEntry> batch = validEntries.AsReadOnly();
 
         await Task.WhenAll(
             _messageBus.PublishAsync("ls-storage-writer", batch, ct),
@@ -71,6 +54,6 @@ public class IngestLogsHandler(
         _logger.LogInformation("Published {Count} entries to queues in {ElapsedMs}ms, batchId {BatchId}",
             validEntries.Count, sw.ElapsedMilliseconds, batchId);
 
-        return new IngestLogsResult(validEntries.Count, command.Entries.Count - validEntries.Count - duplicateCount, batchId);
+        return new IngestLogsResult(validEntries.Count, command.Entries.Count - validEntries.Count, batchId);
     }
 }
