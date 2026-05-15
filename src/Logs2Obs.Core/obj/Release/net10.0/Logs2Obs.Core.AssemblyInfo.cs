@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Logs2Obs.Core")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e2802584314e34968475c35315fd28b38d00280a")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+9283e9fc9e4960e8aead7049be52f1717bd93214")]
 [assembly: System.Reflection.AssemblyProductAttribute("Logs2Obs.Core")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Logs2Obs.Core")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

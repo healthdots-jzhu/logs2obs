@@ -10,3 +10,4 @@ C:\Users\zhuya\Code\logs2obs\src\Logs2Obs.Core\obj\Release\net10.0\Logs2Obs.Core
 C:\Users\zhuya\Code\logs2obs\src\Logs2Obs.Core\obj\Release\net10.0\refint\Logs2Obs.Core.dll
 C:\Users\zhuya\Code\logs2obs\src\Logs2Obs.Core\obj\Release\net10.0\Logs2Obs.Core.pdb
 C:\Users\zhuya\Code\logs2obs\src\Logs2Obs.Core\obj\Release\net10.0\ref\Logs2Obs.Core.dll
+C:\Users\zhuya\Code\logs2obs\src\Logs2Obs.Core\obj\Release\net10.0\Logs2Obs.Core.sourcelink.json
