@@ -1,5 +1,6 @@
 namespace Logs2Obs.Core.Handlers;
 
+using FluentValidation;
 using Logs2Obs.Core.Abstractions;
 using Logs2Obs.Core.Commands;
 using Logs2Obs.Core.Mapping;
@@ -10,10 +11,12 @@ using System.Diagnostics;
 
 public class IngestLogsHandler(
     IMessageBus messageBus,
+    IValidator<LogEntryDto> validator,
     ILogger<IngestLogsHandler> logger)
     : IRequestHandler<IngestLogsCommand, IngestLogsResult>
 {
     private readonly IMessageBus _messageBus = messageBus;
+    private readonly IValidator<LogEntryDto> _validator = validator;
     private readonly ILogger<IngestLogsHandler> _logger = logger;
 
     public async Task<IngestLogsResult> Handle(IngestLogsCommand command, CancellationToken ct)
@@ -27,6 +30,14 @@ public class IngestLogsHandler(
 
         foreach (var dto in command.Entries)
         {
+            var validation = _validator.Validate(dto);
+            if (!validation.IsValid)
+            {
+                _logger.LogWarning("Rejected invalid entry for tenant {TenantId}: {Errors}",
+                    command.TenantId, string.Join("; ", validation.Errors.Select(e => e.ErrorMessage)));
+                continue;
+            }
+
             try
             {
                 var entry = DtoMapper.ToDomain(dto, command.TenantId, command.IngestionMode);
