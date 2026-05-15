@@ -10,5 +10,6 @@ public sealed record AlertRule
     public required double ThresholdValue { get; init; }
     public int EvaluationIntervalSeconds { get; init; } = 60;
     public string? NotificationChannel { get; init; }
+    public IReadOnlyList<AlertDestination> Destinations { get; init; } = Array.Empty<AlertDestination>();
     public bool IsEnabled { get; init; }
 }

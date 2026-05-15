@@ -31,10 +31,15 @@ public sealed record UpdatePullJobRequest(
 
 public sealed record CreateAlertRequest(
     string Name,
-    string Query,
-    string Condition,
-    string Severity,
-    IReadOnlyList<string> NotificationChannels);
+    string? Query = null,
+    string? Condition = null,
+    string? Severity = null,
+    IReadOnlyList<string>? NotificationChannels = null,
+    string? Sql = null,
+    double? Threshold = null,
+    string? ComparisonOperator = null,
+    int? EvaluationIntervalMinutes = null,
+    IReadOnlyList<AlertDestination>? Destinations = null);
 
 public sealed record CreateApiKeyRequest(
     string Name,

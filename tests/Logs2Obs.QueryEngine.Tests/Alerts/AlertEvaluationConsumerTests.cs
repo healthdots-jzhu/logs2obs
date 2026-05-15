@@ -56,6 +56,53 @@ public class AlertEvaluationConsumerTests
     }
 
     [Fact]
+    public async Task EvaluateAsync_WhenRuleHasHookDestinations_PublishesThemOnAlertEvent()
+    {
+        var destination = new AlertDestination
+        {
+            Type = "webhook",
+            WebhookUrl = "https://hooks.example.test/alerts"
+        };
+        var rule = BuildRule("rule-hook", "SELECT 1", ">", 5, "webhook") with
+        {
+            Destinations = new[] { destination }
+        };
+        var batch = BuildBatch();
+        var metadataStore = BuildMetadataStore(rule);
+
+        var queryEngine = new Mock<IQueryEngine>();
+        queryEngine.Setup(x => x.SubmitAsync(TenantId, rule.Sql, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new QuerySubmitResult { Status = QueryStatus.Completed, ResultLocation = "[10]" });
+
+        var publishTcs = new TaskCompletionSource<AlertFiredEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var ackTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var messageBus = new Mock<IMessageBus>();
+        messageBus.Setup(x => x.SubscribeAsync<LogEntryBatch>(AlertQueue, It.IsAny<CancellationToken>()))
+            .Returns(SingleMessage(batch));
+        messageBus.Setup(x => x.PublishAsync(EventsQueue, It.IsAny<AlertFiredEvent>(), It.IsAny<CancellationToken>()))
+            .Callback<string, AlertFiredEvent, CancellationToken>((_, evt, _) => publishTcs.TrySetResult(evt))
+            .Returns(Task.CompletedTask);
+        messageBus.Setup(x => x.AcknowledgeAsync("receipt-1", It.IsAny<CancellationToken>()))
+            .Callback(() => ackTcs.TrySetResult(true))
+            .Returns(Task.CompletedTask);
+
+        var consumer = new AlertEvaluationConsumer(
+            messageBus.Object,
+            metadataStore.Object,
+            queryEngine.Object,
+            new AlertEvaluationMetrics(),
+            CreateOptions(),
+            NullLogger<AlertEvaluationConsumer>.Instance);
+
+        await consumer.StartAsync(CancellationToken.None);
+        var evt = await publishTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await ackTcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await consumer.StopAsync(CancellationToken.None);
+
+        evt.Destinations.Should().ContainSingle().Which.Should().Be(destination);
+    }
+
+    [Fact]
     public async Task EvaluateAsync_WhenThresholdNotBreached_DoesNotPublish()
     {
         var rule = BuildRule("rule-2", "SELECT 2", ">", 10, null);

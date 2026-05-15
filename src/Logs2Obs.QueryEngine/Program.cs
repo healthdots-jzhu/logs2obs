@@ -37,6 +37,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<GraphRenderService>();
         services.AddScoped<AiQueryAuditLogger>();
         services.AddSingleton<AlertEvaluationMetrics>();
+        services.AddHttpClient(AlertNotificationService.HttpClientName);
         services.AddSingleton<AlertNotificationService>();
         services.AddHostedService<AlertEvaluationConsumer>();
         services.AddSingleton<MatViewRefreshService>();

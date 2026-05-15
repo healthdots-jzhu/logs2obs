@@ -100,7 +100,8 @@ public sealed class AlertEvaluationConsumer(
                                 ActualValue = value.Value,
                                 ThresholdValue = rule.ThresholdValue,
                                 ThresholdOperator = rule.ThresholdOperator,
-                                NotificationChannel = rule.NotificationChannel
+                                NotificationChannel = rule.NotificationChannel,
+                                Destinations = rule.Destinations
                             };
 
                             await _publishPipeline.ExecuteAsync(async t =>

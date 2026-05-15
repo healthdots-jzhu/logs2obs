@@ -10,5 +10,6 @@ public sealed record AlertFiredEvent
     public required double ThresholdValue { get; init; }
     public required string ThresholdOperator { get; init; }
     public required string? NotificationChannel { get; init; }
+    public IReadOnlyList<AlertDestination> Destinations { get; init; } = Array.Empty<AlertDestination>();
     public DateTimeOffset FiredAt { get; init; } = DateTimeOffset.UtcNow;
 }
