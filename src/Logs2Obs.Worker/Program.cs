@@ -1,4 +1,5 @@
 using Logs2Obs.Adapters.Local.DependencyInjection;
+using Logs2Obs.Core.DependencyInjection;
 using Logs2Obs.Worker.Options;
 using Logs2Obs.Worker.Parquet;
 using Logs2Obs.Worker.Telemetry;
@@ -12,6 +13,7 @@ var host = Host.CreateDefaultBuilder(args)
     .UseSerilog((ctx, cfg) => cfg.WriteTo.Console())
     .ConfigureServices((ctx, services) =>
     {
+        services.AddLogs2ObsCore();
         services.AddLocalAdapters(ctx.Configuration);
         services.Configure<WorkerOptions>(ctx.Configuration.GetSection("Worker"));
         services.AddSingleton<WorkerMetrics>();

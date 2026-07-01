@@ -84,9 +84,9 @@ app.UseMiddleware<TenantContextMiddleware>();
 
 app.UseRateLimiter();
 
-app.MapHealthChecks("/health/live");
-app.MapHealthChecks("/health/ready");
-app.MapPrometheusScrapingEndpoint("/metrics");
+app.MapHealthChecks("/health/live").AllowAnonymous();
+app.MapHealthChecks("/health/ready").AllowAnonymous();
+app.MapPrometheusScrapingEndpoint("/metrics").AllowAnonymous();
 app.MapGrpcService<LogIngestionGrpcService>();
 
 app.MapLogsEndpoints();

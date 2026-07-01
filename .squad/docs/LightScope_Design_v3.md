@@ -1,7 +1,9 @@
 # LightScope: Lightweight Observability & Log Intelligence Service
+
 ### Design v3.0 — .NET 10 | Cloud-Agnostic | AI-Powered | Production-Grade
 
 > **Changelog from v2.0:**
+>
 > - Upgraded to **.NET 10** throughout
 > - Added **Schema Evolution Strategy** with `ISchemaRegistry`
 > - Added **Exactly-Once / Idempotency** strategy
@@ -23,31 +25,31 @@
 
 1. [Architecture Overview](#1-architecture-overview)
 2. [What is gRPC and When to Use It](#2-what-is-grpc-and-when-to-use-it)
-3. [Messaging: SNS Fanout & SQS Queue Design](#3-messaging-sns-fanout--sqs-queue-design)
-4. [Cloud-Agnostic Design: Adapter & Plugin Patterns](#4-cloud-agnostic-design-adapter--plugin-patterns)
+3. [Messaging: SNS Fanout &amp; SQS Queue Design](#3-messaging-sns-fanout--sqs-queue-design)
+4. [Cloud-Agnostic Design: Adapter &amp; Plugin Patterns](#4-cloud-agnostic-design-adapter--plugin-patterns)
 5. [Local Development with Docker (No Cloud Required)](#5-local-development-with-docker-no-cloud-required)
 6. [Core Design Principles](#6-core-design-principles)
-7. [Data Model & Schema Design](#7-data-model--schema-design)
+7. [Data Model &amp; Schema Design](#7-data-model--schema-design)
 8. [Schema Evolution Strategy](#8-schema-evolution-strategy)
-9. [Exactly-Once & Idempotency Strategy](#9-exactly-once--idempotency-strategy)
+9. [Exactly-Once &amp; Idempotency Strategy](#9-exactly-once--idempotency-strategy)
 10. [API Design](#10-api-design)
-11. [API-Layer Backpressure & Rate Limiting](#11-api-layer-backpressure--rate-limiting)
+11. [API-Layer Backpressure &amp; Rate Limiting](#11-api-layer-backpressure--rate-limiting)
 12. [Log Ingestion Pipeline with Async/Multi-Thread Detail](#12-log-ingestion-pipeline-with-asyncmulti-thread-detail)
-13. [External Log Pulling (S3 & Others)](#13-external-log-pulling-s3--others)
-14. [Storage Strategy & OpenSearch ILM](#14-storage-strategy--opensearch-ilm)
+13. [External Log Pulling (S3 &amp; Others)](#13-external-log-pulling-s3--others)
+14. [Storage Strategy &amp; OpenSearch ILM](#14-storage-strategy--opensearch-ilm)
 15. [Query Tier Routing: Hot vs Warm vs Cold](#15-query-tier-routing-hot-vs-warm-vs-cold)
-16. [Query Engine, Cost Guardrails & Replay](#16-query-engine-cost-guardrails--replay)
-17. [Graph Support & Visualization Engine](#17-graph-support--visualization-engine)
+16. [Query Engine, Cost Guardrails &amp; Replay](#16-query-engine-cost-guardrails--replay)
+17. [Graph Support &amp; Visualization Engine](#17-graph-support--visualization-engine)
 18. [AI-Powered Queries: GitHub Models API + Safety Layer](#18-ai-powered-queries-github-models-api--safety-layer)
 19. [Authentication: API Key + JWT/Cognito Dual Strategy](#19-authentication-api-key--jwtcognito-dual-strategy)
 20. [Multi-Tenancy: Strong Isolation Model](#20-multi-tenancy-strong-isolation-model)
-21. [Self-Observability: OpenTelemetry & Health Endpoints](#21-self-observability-opentelemetry--health-endpoints)
-22. [Materialized Views & Aggregations](#22-materialized-views--aggregations)
+21. [Self-Observability: OpenTelemetry &amp; Health Endpoints](#21-self-observability-opentelemetry--health-endpoints)
+22. [Materialized Views &amp; Aggregations](#22-materialized-views--aggregations)
 23. [Stream Processing Option (Kafka/Redpanda)](#23-stream-processing-option-kafkaredpanda)
 24. [Security](#24-security)
 25. [Project Structure](#25-project-structure)
-26. [Configuration & Deployment](#26-configuration--deployment)
-27. [Coding Agent Rules & Conventions](#27-coding-agent-rules--conventions)
+26. [Configuration &amp; Deployment](#26-configuration--deployment)
+27. [Coding Agent Rules &amp; Conventions](#27-coding-agent-rules--conventions)
 28. [Implementation Phases](#28-implementation-phases)
 29. [Full Markdown Documentation (Phase 14)](#29-full-markdown-documentation-phase-14)
 
@@ -153,23 +155,23 @@
 
 ### gRPC vs REST
 
-| Aspect | REST (JSON/HTTP 1.1) | gRPC (Protobuf/HTTP 2) |
-|--------|---------------------|----------------------|
-| Payload | JSON (~verbose) | Protobuf (binary, compact) |
-| Speed | Moderate | 3–10× faster serialization |
-| Streaming | SSE / WebSockets (bolted on) | Native: unary, server, client, bidirectional |
-| Contract | OpenAPI (optional) | `.proto` (required, code-generated) |
-| Browser support | Native | Requires gRPC-Web proxy |
-| Best for | Public APIs, browser clients | Internal services, high-throughput agents |
+| Aspect          | REST (JSON/HTTP 1.1)         | gRPC (Protobuf/HTTP 2)                       |
+| --------------- | ---------------------------- | -------------------------------------------- |
+| Payload         | JSON (~verbose)              | Protobuf (binary, compact)                   |
+| Speed           | Moderate                     | 3–10× faster serialization                 |
+| Streaming       | SSE / WebSockets (bolted on) | Native: unary, server, client, bidirectional |
+| Contract        | OpenAPI (optional)           | `.proto` (required, code-generated)        |
+| Browser support | Native                       | Requires gRPC-Web proxy                      |
+| Best for        | Public APIs, browser clients | Internal services, high-throughput agents    |
 
 ### gRPC Use Cases in LightScope
 
-| Use Case | Why gRPC |
-|----------|---------|
-| **High-throughput log agents** | 50k+ entries/sec; Protobuf saves 60–70% payload vs JSON |
+| Use Case                             | Why gRPC                                                         |
+| ------------------------------------ | ---------------------------------------------------------------- |
+| **High-throughput log agents** | 50k+ entries/sec; Protobuf saves 60–70% payload vs JSON         |
 | **Real-time metric streaming** | Client-streaming RPC pushes continuous samples on one connection |
-| **Internal service calls** | Worker ↔ QueryEngine typed RPC with generated clients |
-| **APM SDKs** | Generated gRPC client ships with .NET/Java/Go SDKs |
+| **Internal service calls**     | Worker ↔ QueryEngine typed RPC with generated clients           |
+| **APM SDKs**                   | Generated gRPC client ships with .NET/Java/Go SDKs               |
 
 ### gRPC Streaming Modes (all implemented in LightScope)
 
@@ -251,6 +253,7 @@ await readerTask;
 ### 3.1 The Fanout Pattern
 
 When a log entry arrives at the API, multiple independent consumers need it:
+
 1. **StorageWriter** — writes Parquet to object store
 2. **SearchIndexer** — indexes to OpenSearch for real-time search
 3. **AlertEvaluator** — evaluates active alert rules in real time
@@ -274,9 +277,9 @@ The API publishes once to **SNS**; SNS fans out copies to independent **SQS queu
 
 #### SNS Topics — 2 Total
 
-| Topic | Type | Purpose |
-|-------|------|---------|
-| `lightscope-ingest` | Standard | All incoming log/metric entries — the main fanout hub |
+| Topic                        | Type     | Purpose                                                                     |
+| ---------------------------- | -------- | --------------------------------------------------------------------------- |
+| `lightscope-ingest`        | Standard | All incoming log/metric entries — the main fanout hub                      |
 | `lightscope-system-events` | Standard | Internal events: job complete, crawler trigger, alert fired, replay started |
 
 **Why Standard (not FIFO)?**
@@ -284,16 +287,16 @@ FIFO SNS/SQS caps at 3,000 msg/sec with batching — insufficient for a logging 
 
 #### SQS Queues — 8 Main + 4 DLQs = 12 Total
 
-| Queue | Type | SNS Subscription | Consumer | DLQ | Max Receive Count |
-|-------|------|-----------------|---------|-----|-------------------|
-| `ls-storage-writer` | Standard | `lightscope-ingest` | Worker | `ls-storage-writer-dlq` | 3 |
-| `ls-search-indexer` | Standard | `lightscope-ingest` | Worker | `ls-search-indexer-dlq` | 3 |
-| `ls-alert-evaluator` | Standard | `lightscope-ingest` | QueryEngine | `ls-alert-evaluator-dlq` | 3 |
-| `ls-matview-refresh` | Standard | `lightscope-ingest` | QueryEngine | `ls-matview-refresh-dlq` | 3 |
-| `ls-pull-job-events` | Standard | `lightscope-system-events` | Puller | `ls-pull-job-events-dlq` | 3 |
-| `ls-replay-events` | Standard | `lightscope-system-events` | Worker | `ls-replay-events-dlq` | 3 |
-| `ls-report-scheduler` | Standard | `lightscope-system-events` | QueryEngine | `ls-report-scheduler-dlq` | 3 |
-| `ls-idempotency-expire` | Standard | `lightscope-system-events` | Worker | `ls-idempotency-expire-dlq` | 3 |
+| Queue                     | Type     | SNS Subscription             | Consumer    | DLQ                           | Max Receive Count |
+| ------------------------- | -------- | ---------------------------- | ----------- | ----------------------------- | ----------------- |
+| `ls-storage-writer`     | Standard | `lightscope-ingest`        | Worker      | `ls-storage-writer-dlq`     | 3                 |
+| `ls-search-indexer`     | Standard | `lightscope-ingest`        | Worker      | `ls-search-indexer-dlq`     | 3                 |
+| `ls-alert-evaluator`    | Standard | `lightscope-ingest`        | QueryEngine | `ls-alert-evaluator-dlq`    | 3                 |
+| `ls-matview-refresh`    | Standard | `lightscope-ingest`        | QueryEngine | `ls-matview-refresh-dlq`    | 3                 |
+| `ls-pull-job-events`    | Standard | `lightscope-system-events` | Puller      | `ls-pull-job-events-dlq`    | 3                 |
+| `ls-replay-events`      | Standard | `lightscope-system-events` | Worker      | `ls-replay-events-dlq`      | 3                 |
+| `ls-report-scheduler`   | Standard | `lightscope-system-events` | QueryEngine | `ls-report-scheduler-dlq`   | 3                 |
+| `ls-idempotency-expire` | Standard | `lightscope-system-events` | Worker      | `ls-idempotency-expire-dlq` | 3                 |
 
 **Total: 2 SNS Topics + 8 SQS Queues + 8 DLQs = 18 resources**
 
@@ -515,21 +518,21 @@ public interface IScheduler
 
 ### 4.3 Provider Equivalence Map
 
-| Capability | AWS | Azure | GCP | Local (Docker) |
-|-----------|-----|-------|-----|---------------|
-| Object Store | S3 | Blob Storage | GCS | MinIO |
-| Message Bus | SNS + SQS | Service Bus | Pub/Sub | RabbitMQ |
-| Stream Bus (opt.) | Kinesis / MSK | Event Hubs | Dataflow | Kafka / Redpanda |
-| Search / Hot | OpenSearch | Elastic on Azure | Elastic on GCP | Meilisearch |
-| Metadata | DynamoDB | CosmosDB | Firestore | PostgreSQL |
-| Query Engine | Athena | Synapse | BigQuery | DuckDB |
-| Idempotency | ElastiCache Redis | Azure Cache | Memorystore | Redis (Docker) |
-| Schema Registry | Glue Schema Reg. | Azure Schema Reg. | Apicurio | PostgreSQL table |
-| Secret Store | Secrets Manager | Key Vault | Secret Manager | `.env` / Vault |
-| Auth | Cognito + API Key | Azure AD + API Key | Firebase + API Key | LocalJwt + API Key |
-| Scheduler | EventBridge | Timer Triggers | Cloud Scheduler | Quartz.NET |
-| Container | ECS/EKS | AKS | GKE | docker-compose |
-| Telemetry | CloudWatch + OTEL | Azure Monitor + OTEL | Cloud Monitoring + OTEL | Prometheus + Grafana |
+| Capability        | AWS               | Azure                | GCP                     | Local (Docker)       |
+| ----------------- | ----------------- | -------------------- | ----------------------- | -------------------- |
+| Object Store      | S3                | Blob Storage         | GCS                     | MinIO                |
+| Message Bus       | SNS + SQS         | Service Bus          | Pub/Sub                 | RabbitMQ             |
+| Stream Bus (opt.) | Kinesis / MSK     | Event Hubs           | Dataflow                | Kafka / Redpanda     |
+| Search / Hot      | OpenSearch        | Elastic on Azure     | Elastic on GCP          | Meilisearch          |
+| Metadata          | DynamoDB          | CosmosDB             | Firestore               | PostgreSQL           |
+| Query Engine      | Athena            | Synapse              | BigQuery                | DuckDB               |
+| Idempotency       | ElastiCache Redis | Azure Cache          | Memorystore             | Redis (Docker)       |
+| Schema Registry   | Glue Schema Reg.  | Azure Schema Reg.    | Apicurio                | PostgreSQL table     |
+| Secret Store      | Secrets Manager   | Key Vault            | Secret Manager          | `.env` / Vault     |
+| Auth              | Cognito + API Key | Azure AD + API Key   | Firebase + API Key      | LocalJwt + API Key   |
+| Scheduler         | EventBridge       | Timer Triggers       | Cloud Scheduler         | Quartz.NET           |
+| Container         | ECS/EKS           | AKS                  | GKE                     | docker-compose       |
+| Telemetry         | CloudWatch + OTEL | Azure Monitor + OTEL | Cloud Monitoring + OTEL | Prometheus + Grafana |
 
 ### 4.4 Provider Registration
 
@@ -555,17 +558,17 @@ builder.Services
 
 ### 5.1 Local Simulators
 
-| Cloud Service | Local Simulator | Notes |
-|--------------|----------------|-------|
-| S3 | MinIO | S3-compatible API |
-| SNS + SQS | RabbitMQ with exchanges | Simpler than LocalStack |
-| OpenSearch | OpenSearch official | Same binary as cloud |
-| DynamoDB / CosmosDB | PostgreSQL | `IMetadataStore` adapter |
-| Athena / BigQuery | DuckDB (in-process) | Reads MinIO Parquet natively |
-| Redis (idempotency) | Redis (Docker) | Identical to cloud |
-| Cognito | LocalJwtAuthHandler | Self-signed JWTs for dev |
-| GitHub Models API | Ollama | OpenAI-compatible endpoint |
-| Prometheus | Prometheus + Grafana | Self-observability |
+| Cloud Service       | Local Simulator         | Notes                        |
+| ------------------- | ----------------------- | ---------------------------- |
+| S3                  | MinIO                   | S3-compatible API            |
+| SNS + SQS           | RabbitMQ with exchanges | Simpler than LocalStack      |
+| OpenSearch          | OpenSearch official     | Same binary as cloud         |
+| DynamoDB / CosmosDB | PostgreSQL              | `IMetadataStore` adapter   |
+| Athena / BigQuery   | DuckDB (in-process)     | Reads MinIO Parquet natively |
+| Redis (idempotency) | Redis (Docker)          | Identical to cloud           |
+| Cognito             | LocalJwtAuthHandler     | Self-signed JWTs for dev     |
+| GitHub Models API   | Ollama                  | OpenAI-compatible endpoint   |
+| Prometheus          | Prometheus + Grafana    | Self-observability           |
 
 ### 5.2 docker-compose.yml
 
@@ -746,22 +749,22 @@ public class DuckDbQueryEngine : IQueryEngine
 
 ## 6. Core Design Principles
 
-| Principle | Description |
-|-----------|-------------|
-| **Hexagonal Architecture** | Core domain has zero cloud SDK dependencies; all adapters implement interfaces |
-| **Open Schema + Registry** | Schema-on-read via Parquet + `ISchemaRegistry`; backward-compatible evolution |
-| **Exactly-Once Processing** | `IIdempotencyStore` deduplicates by `LogEntry.Id` (UUIDv7) |
-| **Polyglot Ingestion** | REST, gRPC streaming, bulk file upload, pull-based connectors, Kafka |
-| **Tier-Aware Querying** | Auto-routing to hot/warm/cold based on time range; cross-tier fan-out |
-| **Cost-Guarded Queries** | Pre-execution cost estimation; tenant scan limits enforced |
-| **AI-Augmented UX** | NL→SQL via GitHub Models API; graph type suggestion; SQL safety validation |
-| **Self-Observability** | OpenTelemetry traces/metrics/logs; `/health/ready`, `/health/live`, `/metrics` |
-| **Materialized Views** | Pre-aggregated error rates, latency percentiles for low-latency dashboards |
-| **Replay Capability** | Re-process any time window from object store (for parser bugs, schema changes) |
-| **Multi-Tenancy** | Per-tenant isolation at S3 prefix, OpenSearch index, query workgroup, rate limit |
-| **Local-First Dev** | Full Docker stack, zero cloud dependency |
-| **Plugin Connectors** | `IPullConnector` factory for extensible external source integration |
-| **Dual Auth** | API Key (SHA-256 hash + Redis cache) + JWT Bearer both supported simultaneously |
+| Principle                         | Description                                                                         |
+| --------------------------------- | ----------------------------------------------------------------------------------- |
+| **Hexagonal Architecture**  | Core domain has zero cloud SDK dependencies; all adapters implement interfaces      |
+| **Open Schema + Registry**  | Schema-on-read via Parquet +`ISchemaRegistry`; backward-compatible evolution      |
+| **Exactly-Once Processing** | `IIdempotencyStore` deduplicates by `LogEntry.Id` (UUIDv7)                      |
+| **Polyglot Ingestion**      | REST, gRPC streaming, bulk file upload, pull-based connectors, Kafka                |
+| **Tier-Aware Querying**     | Auto-routing to hot/warm/cold based on time range; cross-tier fan-out               |
+| **Cost-Guarded Queries**    | Pre-execution cost estimation; tenant scan limits enforced                          |
+| **AI-Augmented UX**         | NL→SQL via GitHub Models API; graph type suggestion; SQL safety validation         |
+| **Self-Observability**      | OpenTelemetry traces/metrics/logs;`/health/ready`, `/health/live`, `/metrics` |
+| **Materialized Views**      | Pre-aggregated error rates, latency percentiles for low-latency dashboards          |
+| **Replay Capability**       | Re-process any time window from object store (for parser bugs, schema changes)      |
+| **Multi-Tenancy**           | Per-tenant isolation at S3 prefix, OpenSearch index, query workgroup, rate limit    |
+| **Local-First Dev**         | Full Docker stack, zero cloud dependency                                            |
+| **Plugin Connectors**       | `IPullConnector` factory for extensible external source integration               |
+| **Dual Auth**               | API Key (SHA-256 hash + Redis cache) + JWT Bearer both supported simultaneously     |
 
 ---
 
@@ -963,6 +966,7 @@ s3://lightscope-logs/
 ### 8.1 Why Schema Evolution Matters
 
 Without a schema strategy:
+
 - Adding a new field to `LogEntry` may break existing Parquet readers (schema mismatch)
 - Removing a field silently produces `NULL` in Athena or causes query failures
 - Renaming a field breaks all saved SQL queries referencing the old name
@@ -970,16 +974,16 @@ Without a schema strategy:
 
 ### 8.2 Schema Evolution Rules
 
-| Change Type | Classification | Safe? | Action Required |
-|-------------|---------------|-------|----------------|
-| Add optional field | Backward-compatible | ✅ Yes | Increment minor version; old readers return NULL |
-| Add required field with default | Backward-compatible | ✅ Yes | Provide default in reader |
-| Remove field | Breaking | ❌ No | Deprecate for 1 version; then remove with major bump |
-| Rename field | Breaking | ❌ No | Add new field, alias old name for 2 versions |
-| Change field type (widening: int→long) | Backward-compatible | ✅ Yes | Parquet handles safely |
-| Change field type (narrowing: long→int) | Breaking | ❌ No | Forbidden without major version bump |
-| Add enum value | Backward-compatible | ✅ Yes | Readers must handle unknown values |
-| Remove enum value | Breaking | ❌ No | Deprecate first |
+| Change Type                              | Classification      | Safe?  | Action Required                                      |
+| ---------------------------------------- | ------------------- | ------ | ---------------------------------------------------- |
+| Add optional field                       | Backward-compatible | ✅ Yes | Increment minor version; old readers return NULL     |
+| Add required field with default          | Backward-compatible | ✅ Yes | Provide default in reader                            |
+| Remove field                             | Breaking            | ❌ No  | Deprecate for 1 version; then remove with major bump |
+| Rename field                             | Breaking            | ❌ No  | Add new field, alias old name for 2 versions         |
+| Change field type (widening: int→long)  | Backward-compatible | ✅ Yes | Parquet handles safely                               |
+| Change field type (narrowing: long→int) | Breaking            | ❌ No  | Forbidden without major version bump                 |
+| Add enum value                           | Backward-compatible | ✅ Yes | Readers must handle unknown values                   |
+| Remove enum value                        | Breaking            | ❌ No  | Deprecate first                                      |
 
 ### 8.3 ISchemaRegistry Implementation
 
@@ -1085,6 +1089,7 @@ public class ParquetSchemaEvolutionReader
 ### 9.1 The Problem
 
 SQS delivers messages **at least once**. Under failure conditions (worker crash after processing but before ack, network timeout), the same message can be delivered multiple times. Without deduplication:
+
 - Duplicate log entries in Parquet files
 - Duplicate documents in OpenSearch
 - Inflated alert counts and metric aggregations
@@ -1336,6 +1341,7 @@ public class IngestLogsHandler(
 ### 10.3 Key REST Contracts
 
 **POST /api/v1/logs — Response:**
+
 ```json
 {
   "accepted": 99,
@@ -1346,6 +1352,7 @@ public class IngestLogsHandler(
 ```
 
 **POST /api/v1/query/sql — Request:**
+
 ```json
 {
   "sql": "SELECT sourceid, COUNT(*) AS errors FROM logs WHERE logtype='Error' AND year='2026' AND month='03' AND day='23' GROUP BY 1 ORDER BY 2 DESC LIMIT 20",
@@ -1355,6 +1362,7 @@ public class IngestLogsHandler(
 ```
 
 **POST /api/v1/query/sql — Response (before cost confirmation):**
+
 ```json
 {
   "queryId": null,
@@ -1703,15 +1711,15 @@ public static class ResiliencePipelines
 
 At **1 million log entries / minute** (~16,667/sec):
 
-| Stage | Target Throughput | Concurrency Model |
-|-------|-----------------|------------------|
-| API ingestion | 16,667 entries/sec | Async thread pool; < 20ms p99 |
-| Message bus | ~unlimited (Standard) | No bottleneck |
-| Worker consumers | 4 queues × 4 tasks × 100 batch | `Parallel.ForEachAsync` DOP=8 |
-| Redis idempotency | ~16,667 GET/sec | Redis handles >100K ops/sec |
-| Parquet write | ~8 MB/sec per partition writer | Batch flush 5s / 1,000 records |
-| OpenSearch index | ~2,000 docs/sec/shard | Bulk 100 docs/request |
-| S3 PUT | ~1 file/5s per partition | 128 MB target file |
+| Stage             | Target Throughput                | Concurrency Model               |
+| ----------------- | -------------------------------- | ------------------------------- |
+| API ingestion     | 16,667 entries/sec               | Async thread pool; < 20ms p99   |
+| Message bus       | ~unlimited (Standard)            | No bottleneck                   |
+| Worker consumers  | 4 queues × 4 tasks × 100 batch | `Parallel.ForEachAsync` DOP=8 |
+| Redis idempotency | ~16,667 GET/sec                  | Redis handles >100K ops/sec     |
+| Parquet write     | ~8 MB/sec per partition writer   | Batch flush 5s / 1,000 records  |
+| OpenSearch index  | ~2,000 docs/sec/shard            | Bulk 100 docs/request           |
+| S3 PUT            | ~1 file/5s per partition         | 128 MB target file              |
 
 **Horizontal scaling:** each Worker pod = 16 parallel consumer pipelines. At 10 pods → 160 pipelines, handling well over 1M/min at comfortable utilization.
 
@@ -1738,18 +1746,18 @@ public interface IPullConnector
 
 ### 13.2 Supported Log File Formats
 
-| Format | Parser | Examples |
-|--------|--------|---------|
-| NDJSON | `NdJsonParser` | Application structured logs |
-| JSON Array | `JsonArrayParser` | Exported log batches |
-| W3C Extended | `W3CParser` | IIS logs, ALB access logs |
-| CLF | `ClfParser` | Apache/Nginx access logs |
-| CSV | `CsvParser` | Custom metric exports |
-| Syslog RFC 5424 | `SyslogParser` | OS/network device logs |
-| AWS CloudTrail | `CloudTrailParser` | AWS API audit logs |
-| AWS VPC Flow | `VpcFlowParser` | Network flow logs |
-| GZIP (any above) | `GzipParserDecorator` | Compressed variants |
-| Parquet (re-ingest) | `ParquetReIngestParser` | Replay from cold storage |
+| Format              | Parser                    | Examples                    |
+| ------------------- | ------------------------- | --------------------------- |
+| NDJSON              | `NdJsonParser`          | Application structured logs |
+| JSON Array          | `JsonArrayParser`       | Exported log batches        |
+| W3C Extended        | `W3CParser`             | IIS logs, ALB access logs   |
+| CLF                 | `ClfParser`             | Apache/Nginx access logs    |
+| CSV                 | `CsvParser`             | Custom metric exports       |
+| Syslog RFC 5424     | `SyslogParser`          | OS/network device logs      |
+| AWS CloudTrail      | `CloudTrailParser`      | AWS API audit logs          |
+| AWS VPC Flow        | `VpcFlowParser`         | Network flow logs           |
+| GZIP (any above)    | `GzipParserDecorator`   | Compressed variants         |
+| Parquet (re-ingest) | `ParquetReIngestParser` | Replay from cold storage    |
 
 ---
 
@@ -1757,20 +1765,23 @@ public interface IPullConnector
 
 ### 14.1 Storage Tiers
 
-| Tier | Store | Retention | Format | Use Case |
-|------|-------|-----------|--------|---------|
-| **Hot** (0–N days) | OpenSearch | Per-tenant setting | JSON documents | Real-time search, alerting |
+| Tier                        | Store               | Retention          | Format           | Use Case                      |
+| --------------------------- | ------------------- | ------------------ | ---------------- | ----------------------------- |
+| **Hot** (0–N days)   | OpenSearch          | Per-tenant setting | JSON documents   | Real-time search, alerting    |
 | **Warm** (N–90 days) | S3 Standard / MinIO | Per-tenant setting | Parquet + SNAPPY | SQL queries via Athena/DuckDB |
-| **Cold** (90+ days) | S3 Glacier IR | Per-tenant setting | Parquet + ZSTD | Compliance, audit |
-| **Archive** | S3 Deep Archive | Configurable | Parquet + ZSTD | Long-term retention |
+| **Cold** (90+ days)   | S3 Glacier IR       | Per-tenant setting | Parquet + ZSTD   | Compliance, audit             |
+| **Archive**           | S3 Deep Archive     | Configurable       | Parquet + ZSTD   | Long-term retention           |
 
 ### 14.2 OpenSearch Index Naming & ILM
 
 **Index naming convention:**
+
 ```
 lightscope-{tenantId}-{yyyy.MM.dd}
 ```
+
 Examples:
+
 - `lightscope-tenant-acme-2026.03.23`
 - `lightscope-tenant-acme-2026.03.22`
 
@@ -1861,6 +1872,7 @@ Examples:
 ```
 
 **Sharding strategy:**
+
 - Default: 2 primary shards per index (scales to ~50 GB/day each)
 - High-volume tenants (>10M entries/day): 4–8 shards via per-tenant template override
 - Replicas: 1 (production), 0 (local dev)
@@ -1949,6 +1961,7 @@ public class QueryTierRouter(ILogger<QueryTierRouter> logger)
 ### 15.2 Tier Routing with Concrete Examples
 
 #### Example A — Real-time error spike (→ Hot)
+
 ```
 User query: "All Fatal errors in payment-service, last 2 hours"
 
@@ -1974,6 +1987,7 @@ OpenSearch DSL:
 ```
 
 #### Example B — Yesterday's error count by service (→ Warm)
+
 ```
 User query: "Count errors by service for 2026-03-22"
 
@@ -1993,6 +2007,7 @@ GROUP BY sourceid ORDER BY 2 DESC
 ```
 
 #### Example C — 30-day P99 latency trend (→ Warm)
+
 ```
 User natural language: "P99 latency trend by service, last 30 days"
 
@@ -2013,6 +2028,7 @@ GROUP BY 1, 2 ORDER BY 1, 2
 ```
 
 #### Example D — 6-month compliance audit (→ Cold)
+
 ```
 User query: "Export all audit logs for Q3 2025"
 
@@ -2027,6 +2043,7 @@ Age: ~180 days > WarmRetentionDays (90 days)
 ```
 
 #### Example E — 5-day cross-tier query (→ Cross-Tier fan-out)
+
 ```
 User query: "Error count by hour for the last 5 days"
 
@@ -2051,13 +2068,13 @@ var merged = MergeTimeBuckets(hotResult.Buckets, warmResult.Rows)
 
 ### 15.3 Tier Routing Summary
 
-| Time Range | Query Type | Tier | Expected Latency |
-|-----------|-----------|------|-----------------|
-| < HotRetentionDays | Any | Hot (OpenSearch) | 50–500ms |
-| Any range | Full-text search | Hot (OpenSearch only) | 50–200ms |
-| Hot–Warm boundary | SQL/aggregation | Warm (Athena/DuckDB) | 2–15s |
-| > WarmRetentionDays | SQL/aggregation | Cold (Athena+Glacier) | 30–120s |
-| Spans multiple tiers | SQL/aggregation | Cross-tier fan-out | Max of tiers |
+| Time Range           | Query Type       | Tier                  | Expected Latency |
+| -------------------- | ---------------- | --------------------- | ---------------- |
+| < HotRetentionDays   | Any              | Hot (OpenSearch)      | 50–500ms        |
+| Any range            | Full-text search | Hot (OpenSearch only) | 50–200ms        |
+| Hot–Warm boundary   | SQL/aggregation  | Warm (Athena/DuckDB)  | 2–15s           |
+| > WarmRetentionDays  | SQL/aggregation  | Cold (Athena+Glacier) | 30–120s         |
+| Spans multiple tiers | SQL/aggregation  | Cross-tier fan-out    | Max of tiers     |
 
 ---
 
@@ -2319,16 +2336,16 @@ public class GraphSuggestionEngine
 
 The following prebuilt graphs are always available via `GET /api/v1/graphs/prebuilt`:
 
-| Name | Type | Description |
-|------|------|-------------|
-| `error-rate-heatmap` | Heatmap | Error density by hour × day of week |
-| `latency-p99-trend` | LineChart | P99 latency over time per service |
-| `error-rate-gauge` | Gauge | Current errors/minute (last 5 min) |
-| `top-errors-bar` | HorizontalBarChart | Top 10 error messages by frequency |
-| `status-code-donut` | DonutChart | HTTP status code distribution |
-| `service-error-scatter` | ScatterPlot | Error count vs. latency correlation |
-| `log-volume-stacked` | StackedAreaChart | Log ingestion volume by log type |
-| `alert-firing-timeline` | LineChart | Alert fires over time |
+| Name                      | Type               | Description                          |
+| ------------------------- | ------------------ | ------------------------------------ |
+| `error-rate-heatmap`    | Heatmap            | Error density by hour × day of week |
+| `latency-p99-trend`     | LineChart          | P99 latency over time per service    |
+| `error-rate-gauge`      | Gauge              | Current errors/minute (last 5 min)   |
+| `top-errors-bar`        | HorizontalBarChart | Top 10 error messages by frequency   |
+| `status-code-donut`     | DonutChart         | HTTP status code distribution        |
+| `service-error-scatter` | ScatterPlot        | Error count vs. latency correlation  |
+| `log-volume-stacked`    | StackedAreaChart   | Log ingestion volume by log type     |
+| `alert-firing-timeline` | LineChart          | Alert fires over time                |
 
 Each template includes: SQL (with `{TENANT_FILTER}` and `{TIME_FILTER}` tokens), Vega-Lite spec, Chart.js config, and recommended time range.
 
@@ -2641,16 +2658,16 @@ public class ApiKeyAuthHandler(
 
 ### 20.1 Isolation Layers
 
-| Layer | Isolation Mechanism | Strength |
-|-------|-------------------|---------|
-| Auth | TenantId from auth context — never from payload | Hard |
-| S3 / Object Store | IAM prefix policy: `arn:aws:s3:::lightscope-logs/logs/tenant={id}/*` | Hard |
-| Athena | Injected `WHERE tenant = '{id}'` + per-tenant Workgroup (optional) | Hard |
-| OpenSearch | Per-tenant index: `lightscope-{tenantId}-{date}`; document-level security | Hard |
-| Rate limits | Per-tenant token bucket (memory + Redis) | Hard |
-| Query scan limit | `TenantSettings.MaxQueryScanGb` enforced before execution | Hard |
-| Idempotency | Redis keys namespaced `idem:{tenantId}:{entryId}` | Isolation |
-| Schema Registry | Per-tenant schema versions | Isolation |
+| Layer             | Isolation Mechanism                                                        | Strength  |
+| ----------------- | -------------------------------------------------------------------------- | --------- |
+| Auth              | TenantId from auth context — never from payload                           | Hard      |
+| S3 / Object Store | IAM prefix policy:`arn:aws:s3:::lightscope-logs/logs/tenant={id}/*`      | Hard      |
+| Athena            | Injected`WHERE tenant = '{id}'` + per-tenant Workgroup (optional)        | Hard      |
+| OpenSearch        | Per-tenant index:`lightscope-{tenantId}-{date}`; document-level security | Hard      |
+| Rate limits       | Per-tenant token bucket (memory + Redis)                                   | Hard      |
+| Query scan limit  | `TenantSettings.MaxQueryScanGb` enforced before execution                | Hard      |
+| Idempotency       | Redis keys namespaced`idem:{tenantId}:{entryId}`                         | Isolation |
+| Schema Registry   | Per-tenant schema versions                                                 | Isolation |
 
 ### 20.2 Per-Tenant Athena Workgroup (Optional, for Cost Attribution)
 
@@ -2787,6 +2804,7 @@ app.MapPrometheusScrapingEndpoint("/metrics");  // Prometheus scrapes this
 ### 21.4 Grafana Dashboard (Local Dev)
 
 Pre-built Grafana dashboard (stored in `infra/grafana/dashboards/lightscope.json`) shows:
+
 - Ingestion rate (entries/sec) by tenant and log type
 - Queue lag in seconds (SQS approximate age)
 - P99 processing latency (ingest → Parquet write)
@@ -2929,16 +2947,16 @@ public async Task<MatViewOrLiveResult> GetDashboardMetricAsync(
 
 ### 23.1 When to Consider Kafka over SNS/SQS
 
-| Factor | SNS+SQS | Kafka/Redpanda |
-|--------|---------|---------------|
-| Throughput | Millions/sec | Millions/sec |
-| Message retention | Up to 14 days | Configurable (days to forever) |
-| Replay capability | Via DLQ only | Native, per-offset |
-| Ordering | No (Standard) | Yes (per partition) |
-| Real-time analytics | Limited | Kafka Streams / ksqlDB |
-| Cost at scale | Pay-per-message | Fixed cluster cost |
-| Operational complexity | Low | Higher |
-| Best for LightScope | Production default | >10M entries/min OR when replay+ordering critical |
+| Factor                 | SNS+SQS            | Kafka/Redpanda                                    |
+| ---------------------- | ------------------ | ------------------------------------------------- |
+| Throughput             | Millions/sec       | Millions/sec                                      |
+| Message retention      | Up to 14 days      | Configurable (days to forever)                    |
+| Replay capability      | Via DLQ only       | Native, per-offset                                |
+| Ordering               | No (Standard)      | Yes (per partition)                               |
+| Real-time analytics    | Limited            | Kafka Streams / ksqlDB                            |
+| Cost at scale          | Pay-per-message    | Fixed cluster cost                                |
+| Operational complexity | Low                | Higher                                            |
+| Best for LightScope    | Production default | >10M entries/min OR when replay+ordering critical |
 
 ### 23.2 KafkaMessageBus Adapter
 
@@ -2985,25 +3003,25 @@ public class KafkaMessageBus(IOptions<KafkaOptions> opts) : IMessageBus
 
 ## 24. Security
 
-| Concern | Implementation |
-|---------|---------------|
-| **Authentication** | Dual: API Key (SHA-256 + salt + Redis cache) + JWT Bearer (Cognito/Azure AD/Local) |
-| **Tenant Isolation** | TenantId always from auth — never from payload; injected into every query |
-| **S3 Isolation** | IAM prefix policy per tenant; `tenant={id}/` enforced by bucket policy |
-| **Athena Isolation** | `TenantQueryInjector` appends partition predicate; regex validation on tenantId |
-| **OpenSearch Isolation** | Per-tenant index naming; OpenSearch fine-grained access control (optional) |
-| **AI SQL Safety** | `ISqlSafetyValidator` blocks DDL/DML; forbids CROSS JOIN; warns on missing partition filters |
-| **AI Audit Trail** | All AI prompts + outputs + safety reports logged to immutable S3 path |
-| **Rate Limiting** | Token bucket per tenant (API layer); sliding window for queries |
-| **Cost Guardrails** | Scan limit per tenant; cost confirmation threshold; EXPLAIN before execute |
-| **Query Read-Only** | SQL allow-list parser; only SELECT permitted; enforced before reaching query engine |
-| **Idempotency** | Redis-backed, TTL-expired; prevents duplicate processing under failure |
-| **Secrets** | `ISecretStore` → Secrets Manager / Key Vault / local `.env` (never in config files) |
-| **Encryption at Rest** | S3 SSE-KMS; OpenSearch encryption; DynamoDB/PostgreSQL encryption |
-| **Encryption in Transit** | TLS 1.3; ALB + ACM; gRPC TLS |
-| **Network** | VPC-deployed; OpenSearch in private subnet; API behind ALB + WAF |
-| **Audit Logs** | All API calls produce `LogType.Audit` entries through the same pipeline |
-| **API Key Hashing** | SHA-256 + application salt; keys never stored in plaintext; shown once on creation |
+| Concern                         | Implementation                                                                                 |
+| ------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **Authentication**        | Dual: API Key (SHA-256 + salt + Redis cache) + JWT Bearer (Cognito/Azure AD/Local)             |
+| **Tenant Isolation**      | TenantId always from auth — never from payload; injected into every query                     |
+| **S3 Isolation**          | IAM prefix policy per tenant;`tenant={id}/` enforced by bucket policy                        |
+| **Athena Isolation**      | `TenantQueryInjector` appends partition predicate; regex validation on tenantId              |
+| **OpenSearch Isolation**  | Per-tenant index naming; OpenSearch fine-grained access control (optional)                     |
+| **AI SQL Safety**         | `ISqlSafetyValidator` blocks DDL/DML; forbids CROSS JOIN; warns on missing partition filters |
+| **AI Audit Trail**        | All AI prompts + outputs + safety reports logged to immutable S3 path                          |
+| **Rate Limiting**         | Token bucket per tenant (API layer); sliding window for queries                                |
+| **Cost Guardrails**       | Scan limit per tenant; cost confirmation threshold; EXPLAIN before execute                     |
+| **Query Read-Only**       | SQL allow-list parser; only SELECT permitted; enforced before reaching query engine            |
+| **Idempotency**           | Redis-backed, TTL-expired; prevents duplicate processing under failure                         |
+| **Secrets**               | `ISecretStore` → Secrets Manager / Key Vault / local `.env` (never in config files)       |
+| **Encryption at Rest**    | S3 SSE-KMS; OpenSearch encryption; DynamoDB/PostgreSQL encryption                              |
+| **Encryption in Transit** | TLS 1.3; ALB + ACM; gRPC TLS                                                                   |
+| **Network**               | VPC-deployed; OpenSearch in private subnet; API behind ALB + WAF                               |
+| **Audit Logs**            | All API calls produce`LogType.Audit` entries through the same pipeline                       |
+| **API Key Hashing**       | SHA-256 + application salt; keys never stored in plaintext; shown once on creation             |
 
 ---
 
@@ -3454,34 +3472,34 @@ ENTRYPOINT ["dotnet", "LightScope.Api.dll"]
 
 ### 27.1 Technology Stack (Mandatory)
 
-| Concern | Technology | Version |
-|---------|-----------|---------|
-| Runtime | .NET 10 | `net10.0` |
-| Language | C# 14 | Primary constructors, `required`, `record`, collection expressions |
-| API style | ASP.NET Core 10 Minimal APIs | No controllers — use endpoint route groups |
-| Command/Query | MediatR 12 | All business logic via `IRequest<T>` / `IRequestHandler<T>` |
-| Validation | FluentValidation 11 | All DTOs validated before MediatR dispatch |
-| Resilience | Polly 8 | All external I/O calls wrapped in `ResiliencePipeline<T>` |
-| Logging | Serilog | Structured; sink: Console + OpenTelemetry |
-| Telemetry | OpenTelemetry | Traces + Metrics + Logs; Prometheus exporter |
-| Messaging | MediatR (in-process) + IMessageBus (external) | Never call IMessageBus directly from controllers |
-| Testing | xUnit + Moq + Testcontainers + FluentAssertions | Integration tests use real Docker containers |
-| Infrastructure | AWS CDK v2 (C#) | One stack file per resource group |
+| Concern        | Technology                                      | Version                                                               |
+| -------------- | ----------------------------------------------- | --------------------------------------------------------------------- |
+| Runtime        | .NET 10                                         | `net10.0`                                                           |
+| Language       | C# 14                                           | Primary constructors,`required`, `record`, collection expressions |
+| API style      | ASP.NET Core 10 Minimal APIs                    | No controllers — use endpoint route groups                           |
+| Command/Query  | MediatR 12                                      | All business logic via`IRequest<T>` / `IRequestHandler<T>`        |
+| Validation     | FluentValidation 11                             | All DTOs validated before MediatR dispatch                            |
+| Resilience     | Polly 8                                         | All external I/O calls wrapped in`ResiliencePipeline<T>`            |
+| Logging        | Serilog                                         | Structured; sink: Console + OpenTelemetry                             |
+| Telemetry      | OpenTelemetry                                   | Traces + Metrics + Logs; Prometheus exporter                          |
+| Messaging      | MediatR (in-process) + IMessageBus (external)   | Never call IMessageBus directly from controllers                      |
+| Testing        | xUnit + Moq + Testcontainers + FluentAssertions | Integration tests use real Docker containers                          |
+| Infrastructure | AWS CDK v2 (C#)                                 | One stack file per resource group                                     |
 
 ### 27.2 Naming Conventions
 
-| Artifact | Convention | Example |
-|---------|-----------|---------|
-| Interfaces | `I` prefix, PascalCase | `IObjectStore`, `ISchemaRegistry` |
-| Commands (writes) | `{Verb}{Noun}Command` | `IngestLogsCommand`, `StartReplayCommand` |
-| Queries (reads) | `Get{Noun}Query` or `Execute{Noun}Query` | `ExecuteSqlQuery`, `GetNaturalLanguageQuery` |
-| Handlers | `{CommandOrQuery}Handler` | `IngestLogsHandler` |
-| Events | `{Noun}{PastVerb}Event` | `ReplayStartedEvent`, `AlertFiredEvent` |
-| DTOs | `{Domain}Dto` | `LogEntryDto`, `PullJobConfigDto` |
-| Options | `{Feature}Options` | `WorkerOptions`, `GitHubModelsOptions` |
-| Adapters | `{Provider}{Interface}` | `S3ObjectStore`, `DuckDbQueryEngine` |
-| Tests | `{ClassUnderTest}Tests` | `QueryTierRouterTests` |
-| Constants | `static readonly` or `const` | `SchemaVersions.Current = 1u` |
+| Artifact          | Convention                                   | Example                                          |
+| ----------------- | -------------------------------------------- | ------------------------------------------------ |
+| Interfaces        | `I` prefix, PascalCase                     | `IObjectStore`, `ISchemaRegistry`            |
+| Commands (writes) | `{Verb}{Noun}Command`                      | `IngestLogsCommand`, `StartReplayCommand`    |
+| Queries (reads)   | `Get{Noun}Query` or `Execute{Noun}Query` | `ExecuteSqlQuery`, `GetNaturalLanguageQuery` |
+| Handlers          | `{CommandOrQuery}Handler`                  | `IngestLogsHandler`                            |
+| Events            | `{Noun}{PastVerb}Event`                    | `ReplayStartedEvent`, `AlertFiredEvent`      |
+| DTOs              | `{Domain}Dto`                              | `LogEntryDto`, `PullJobConfigDto`            |
+| Options           | `{Feature}Options`                         | `WorkerOptions`, `GitHubModelsOptions`       |
+| Adapters          | `{Provider}{Interface}`                    | `S3ObjectStore`, `DuckDbQueryEngine`         |
+| Tests             | `{ClassUnderTest}Tests`                    | `QueryTierRouterTests`                         |
+| Constants         | `static readonly` or `const`             | `SchemaVersions.Current = 1u`                  |
 
 ### 27.3 DTO vs Domain Rules
 
@@ -3807,6 +3825,7 @@ Phase 14: Full Documentation (docs/ directory)
 ### 29.1 docs/README.md
 
 **Required content:**
+
 - LightScope summary (2 paragraphs)
 - Feature bullet list (all major features from Section 6)
 - Quick Start (local docker-compose, 5 steps max)
@@ -3817,6 +3836,7 @@ Phase 14: Full Documentation (docs/ directory)
 ### 29.2 docs/architecture.md
 
 **Required content:**
+
 - Full ASCII architecture diagram (from Section 1)
 - Hexagonal architecture explanation with diagram (Section 4.1)
 - Service responsibilities table (Api, Worker, Puller, QueryEngine)
@@ -3827,6 +3847,7 @@ Phase 14: Full Documentation (docs/ directory)
 ### 29.3 docs/api-reference.md
 
 **Required content:**
+
 - Every endpoint: method, path, description, auth requirement
 - Request/response schemas (JSON, with field descriptions)
 - HTTP status codes and error codes
@@ -3880,6 +3901,7 @@ curl -X POST http://localhost:5000/api/v1/replay \
 ### 29.4 docs/local-development.md
 
 **Required content:**
+
 - Prerequisites: Docker Desktop 4.x, .NET 10 SDK, Git
 - Step-by-step setup (6 steps: clone → up → setup script → pull Ollama model → verify → test)
 - All environment variables table (provider, endpoints, credentials for local stack)
@@ -3892,6 +3914,7 @@ curl -X POST http://localhost:5000/api/v1/replay \
 ### 29.5 docs/query-guide.md
 
 **Required content:**
+
 - Tier routing explained with the 5 examples from Section 15.2
 - SQL best practices (partition filters, LIMIT, APPROX_PERCENTILE)
 - Anti-patterns (full table scans, no partition filters)
@@ -3922,6 +3945,7 @@ AND ((year='2026' AND month='03' AND day >= '17')
 ### 29.6 docs/schema-evolution.md (NEW)
 
 **Required content:**
+
 - Why schema evolution matters (data at scale, Parquet compatibility)
 - Evolution rules table (Section 8.2)
 - How to add a new optional field (step-by-step example)
@@ -3934,6 +3958,7 @@ AND ((year='2026' AND month='03' AND day >= '17')
 ### 29.7 docs/idempotency.md (NEW)
 
 **Required content:**
+
 - Why exactly-once matters for logging (duplicates in dashboards)
 - UUIDv7 as idempotency key (structure, time-sortability)
 - How the Redis idempotency store works (key format, TTL)
@@ -3945,6 +3970,7 @@ AND ((year='2026' AND month='03' AND day >= '17')
 ### 29.8 docs/replay-guide.md (NEW)
 
 **Required content:**
+
 - When to use replay (5 use cases from Section 16.4)
 - How replay works (S3 → Puller → SQS → Worker → OpenSearch)
 - Starting a replay via API (curl example)
@@ -3956,6 +3982,7 @@ AND ((year='2026' AND month='03' AND day >= '17')
 ### 29.9 docs/materialized-views.md (NEW)
 
 **Required content:**
+
 - Why pre-aggregated views matter (dashboard latency vs. cost)
 - All standard prebuilt views (from Section 22.2)
 - How to query a materialized view via API
@@ -3967,6 +3994,7 @@ AND ((year='2026' AND month='03' AND day >= '17')
 ### 29.10 docs/graph-guide.md
 
 **Required content:**
+
 - All 9 supported graph types with description and when each is used
 - Graph type selection logic (rule-based → AI-enriched)
 - All 8 prebuilt graph templates with example curl
@@ -3977,6 +4005,7 @@ AND ((year='2026' AND month='03' AND day >= '17')
 ### 29.11 docs/security.md
 
 **Required content:**
+
 - Dual auth setup: creating API keys (curl), setting up Cognito (CDK snippet)
 - Tenant isolation guarantees at each layer (table from Section 24)
 - SQL safety rules enforced (all forbidden keywords, CROSS JOIN warning)
@@ -3989,6 +4018,7 @@ AND ((year='2026' AND month='03' AND day >= '17')
 ### 29.12 docs/runbooks/scaling.md
 
 **Required content:**
+
 - When to scale Worker pods (queue depth > 10,000 messages)
 - Worker scaling formula: pods = ceil(target_throughput / (ConsumerCount × BatchSize × RecvRate))
 - OpenSearch shard scaling triggers (primary shard > 30 GB)
@@ -3998,6 +4028,7 @@ AND ((year='2026' AND month='03' AND day >= '17')
 ### 29.13 docs/runbooks/incident-response.md
 
 **Required content:**
+
 - DLQ investigation steps (how to inspect, replay, or purge)
 - How to replay messages from DLQ to main queue
 - OpenSearch index recovery (if index corrupted → trigger replay from Parquet)
@@ -4008,6 +4039,7 @@ AND ((year='2026' AND month='03' AND day >= '17')
 ### 29.14 docs/runbooks/adding-a-connector.md
 
 **Required content:**
+
 - Step-by-step: implement `IPullConnector` (with code template)
 - Register with named DI factory
 - Add parser for new log format (implement `ILogFileParser`)
@@ -4017,10 +4049,13 @@ AND ((year='2026' AND month='03' AND day >= '17')
 ### 29.15 docs/runbooks/adding-a-cloud-provider.md
 
 **Required content:**
+
 - Step-by-step: create `LightScope.Adapters.{Provider}/` project
 - Implement all required interfaces (9 core interfaces)
 - Add provider key to `ProviderExtensions.cs`
 - Add provider section to `appsettings.json`
 - Add docker-compose service for local equivalent
 - Testing checklist (all integration tests must pass against new provider)
+
+```
 ```

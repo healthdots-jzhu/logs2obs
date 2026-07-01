@@ -20,7 +20,7 @@ public sealed class PayloadSizeMiddleware
         _logger = logger;
     }
 
-    public async Task InvokeAsync(HttpContext context, CancellationToken cancellationToken)
+    public async Task InvokeAsync(HttpContext context)
     {
         if (context.Request.Path.StartsWithSegments("/api/v1/logs", StringComparison.OrdinalIgnoreCase))
         {
@@ -38,7 +38,7 @@ public sealed class PayloadSizeMiddleware
                     error = "Payload too large",
                     maxSize = _options.MaxPayloadBytes,
                     receivedSize = context.Request.ContentLength.Value
-                }, cancellationToken);
+                }, context.RequestAborted);
                 return;
             }
         }

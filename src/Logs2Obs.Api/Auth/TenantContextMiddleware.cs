@@ -13,7 +13,7 @@ public sealed class TenantContextMiddleware
         _logger = logger;
     }
 
-    public async Task InvokeAsync(HttpContext context, CancellationToken cancellationToken)
+    public async Task InvokeAsync(HttpContext context)
     {
         if (context.User.Identity?.IsAuthenticated == true)
         {
@@ -25,7 +25,7 @@ public sealed class TenantContextMiddleware
             {
                 _logger.LogWarning("Authenticated user missing tenantId claim");
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                await context.Response.WriteAsJsonAsync(new { error = "Missing tenant identifier" }, cancellationToken);
+                await context.Response.WriteAsJsonAsync(new { error = "Missing tenant identifier" }, context.RequestAborted);
                 return;
             }
 

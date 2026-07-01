@@ -21,13 +21,13 @@ dotnet test
 
 ## Services
 
-| Service | URL | Credentials |
-|---------|-----|-------------|
-| MinIO Console | http://localhost:9001 | minioadmin / minioadmin |
-| RabbitMQ Management | http://localhost:15672 | guest / guest |
-| Meilisearch | http://localhost:7700 | — |
-| PostgreSQL | localhost:5432 | logs2obs / logs2obs |
-| Redis | localhost:6379 | — |
+| Service             | URL                    | Credentials             |
+| ------------------- | ---------------------- | ----------------------- |
+| MinIO Console       | http://localhost:9001  | minioadmin / minioadmin |
+| RabbitMQ Management | http://localhost:15672 | guest / guest           |
+| Meilisearch         | http://localhost:7700  | —                      |
+| PostgreSQL          | localhost:5432         | logs2obs / logs2obs     |
+| Redis               | localhost:6379         | —                      |
 
 ## Optional Profiles
 

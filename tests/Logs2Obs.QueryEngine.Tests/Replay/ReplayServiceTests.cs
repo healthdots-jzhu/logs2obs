@@ -1,7 +1,7 @@
 namespace Logs2Obs.QueryEngine.Tests.Replay;
 
-using Logs2Obs.QueryEngine.Options;
-using Logs2Obs.QueryEngine.Replay;
+using Logs2Obs.Adapters.Local.Options;
+using Logs2Obs.Adapters.Local.Replay;
 using Microsoft.Extensions.Options;
 
 public class ReplayServiceTests
@@ -123,7 +123,7 @@ public class ReplayServiceTests
 
     private static ReplayService CreateService(Mock<IMetadataStore> metadataStore, Mock<IMessageBus>? messageBus = null)
     {
-        var options = Options.Create(new QueryEngineOptions { SystemEventsQueue = "system-events" });
+        var options = Options.Create(new SystemEventsOptions { QueueName = "system-events" });
         return new ReplayService(
             new Mock<IObjectStore>().Object,
             messageBus?.Object ?? new Mock<IMessageBus>().Object,

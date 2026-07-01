@@ -27,4 +27,12 @@
     <PackageReference Include="Serilog.Extensions.Hosting" Version="8.*" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.*" />
   </ItemGroup>
+  <!-- Logs2Obs.Worker is referenced for its compiled types only; its own appsettings.json
+       would otherwise collide with this project's during publish (NETSDK1152). -->
+  <Target Name="ExcludeTransitiveWorkerAppSettings" AfterTargets="ComputeFilesToPublish" BeforeTargets="_HandleFileConflictsForPublish">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="$([System.String]::new('%(Filename)').StartsWith('appsettings')) and $([System.String]::new('%(FullPath)').Contains('Logs2Obs.Worker'))" />
+    </ItemGroup>
+  </Target>
 </Project>

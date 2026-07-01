@@ -1,6 +1,7 @@
 using Logs2Obs.Adapters.Local.DependencyInjection;
 using Logs2Obs.Core.Abstractions;
 using Logs2Obs.Core.Commands;
+using Logs2Obs.Core.DependencyInjection;
 using Logs2Obs.Core.Graphs;
 using Logs2Obs.Core.Query;
 using Logs2Obs.QueryEngine.Alerts;
@@ -21,19 +22,15 @@ var host = Host.CreateDefaultBuilder(args)
     .UseSerilog((ctx, cfg) => cfg.WriteTo.Console())
     .ConfigureServices((ctx, services) =>
     {
+        services.AddLogs2ObsCore();
         services.AddLocalAdapters(ctx.Configuration);
-        services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(ExecuteSqlQuery).Assembly));
 
         services.Configure<QueryEngineOptions>(ctx.Configuration.GetSection("QueryEngine"));
         services.Configure<GitHubModelsOptions>(ctx.Configuration.GetSection("LightScope:AI:GitHub"));
-
-        services.AddSingleton<ISqlSafetyValidator, SqlSafetyValidator>();
-        services.AddSingleton<QueryTierRouter>();
         services.AddSingleton<QueryEngineMetrics>();
         services.AddSingleton<QueryService>();
         services.AddSingleton<SavedQueryService>();
         services.AddSingleton<ScheduledReportService>();
-        services.AddSingleton<GraphSuggestionEngine>();
         services.AddSingleton<GraphRenderService>();
         services.AddScoped<AiQueryAuditLogger>();
         services.AddSingleton<AlertEvaluationMetrics>();
@@ -42,7 +39,6 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddHostedService<AlertEvaluationConsumer>();
         services.AddSingleton<MatViewRefreshService>();
         services.AddHostedService<MatViewRefreshConsumer>();
-        services.AddSingleton<IReplayService, ReplayService>();
         services.AddHostedService<ReplayWorker>();
         services.AddHealthChecks();
 

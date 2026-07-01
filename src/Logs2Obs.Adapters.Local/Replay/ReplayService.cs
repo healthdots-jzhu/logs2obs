@@ -1,9 +1,9 @@
-namespace Logs2Obs.QueryEngine.Replay;
+namespace Logs2Obs.Adapters.Local.Replay;
 
+using Logs2Obs.Adapters.Local.Options;
 using Logs2Obs.Core.Abstractions;
 using Logs2Obs.Core.Models;
 using Logs2Obs.Core.Resilience;
-using Logs2Obs.QueryEngine.Options;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Polly;
@@ -12,14 +12,14 @@ public sealed class ReplayService(
     IObjectStore objectStore,
     IMessageBus messageBus,
     IMetadataStore metadataStore,
-    IOptions<QueryEngineOptions> options,
+    IOptions<SystemEventsOptions> options,
     ILogger<ReplayService> logger) : IReplayService
 {
     private const string TableName = "replay-jobs";
 
     private readonly IMessageBus _messageBus = messageBus;
     private readonly IMetadataStore _metadataStore = metadataStore;
-    private readonly QueryEngineOptions _options = options.Value;
+    private readonly SystemEventsOptions _options = options.Value;
     private readonly ILogger<ReplayService> _logger = logger;
     private readonly ResiliencePipeline<object?> _publishPipeline = ResiliencePipelines.ForExternalIo<object?>();
 
@@ -54,7 +54,7 @@ public sealed class ReplayService(
 
         await _publishPipeline.ExecuteAsync(async token =>
         {
-            await _messageBus.PublishAsync(_options.SystemEventsQueue, evt, token);
+            await _messageBus.PublishAsync(_options.QueueName, evt, token);
             return (object?)null;
         }, ct);
 

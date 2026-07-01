@@ -3,6 +3,7 @@ WORKDIR /src
 COPY ["src/Logs2Obs.Puller/Logs2Obs.Puller.csproj", "src/Logs2Obs.Puller/"]
 COPY ["src/Logs2Obs.Core/Logs2Obs.Core.csproj", "src/Logs2Obs.Core/"]
 COPY ["src/Logs2Obs.Adapters.Local/Logs2Obs.Adapters.Local.csproj", "src/Logs2Obs.Adapters.Local/"]
+COPY ["src/Logs2Obs.Worker/Logs2Obs.Worker.csproj", "src/Logs2Obs.Worker/"]
 RUN dotnet restore "src/Logs2Obs.Puller/Logs2Obs.Puller.csproj"
 COPY . .
 RUN dotnet publish "src/Logs2Obs.Puller/Logs2Obs.Puller.csproj" -c Release -o /app/publish --no-restore

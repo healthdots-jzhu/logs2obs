@@ -8,6 +8,7 @@ using Logs2Obs.Adapters.Local.MetadataStore;
 using Logs2Obs.Adapters.Local.ObjectStore;
 using Logs2Obs.Adapters.Local.Options;
 using Logs2Obs.Adapters.Local.QueryEngine;
+using Logs2Obs.Adapters.Local.Replay;
 using Logs2Obs.Adapters.Local.SchemaRegistry;
 using Logs2Obs.Adapters.Local.Search;
 using Logs2Obs.Adapters.Local.Secrets;
@@ -34,6 +35,7 @@ public static class LocalAdaptersServiceCollectionExtensions
         services.Configure<MeilisearchOptions>(configuration.GetSection("LocalAdapters:Meilisearch"));
         services.Configure<DuckDbOptions>(configuration.GetSection("LocalAdapters:DuckDb"));
         services.Configure<OllamaOptions>(configuration.GetSection("LocalAdapters:Ollama"));
+        services.Configure<SystemEventsOptions>(configuration.GetSection("SystemEvents"));
 
         // Redis
         services.AddSingleton<IConnectionMultiplexer>(sp =>
@@ -80,6 +82,7 @@ public static class LocalAdaptersServiceCollectionExtensions
         services.AddSingleton<IIdempotencyStore, RedisIdempotencyStore>();
         services.AddSingleton<IMatViewEngine, RedisMatViewEngine>();
         services.AddSingleton<ISecretStore, LocalSecretStore>();
+        services.AddSingleton<IReplayService, ReplayService>();
         services.AddSingleton<IAiService, OllamaAiService>();
         services.AddSingleton<Logs2Obs.Core.Abstractions.IScheduler, QuartzScheduler>();
 
