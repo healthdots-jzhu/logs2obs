@@ -5,6 +5,9 @@ obj/
 .vs/
 .idea/
 
+**/obj/
+**/bin/
+
 # local dev
 docker/volumes/
 *.env.local

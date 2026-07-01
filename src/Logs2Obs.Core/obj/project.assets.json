@@ -45,7 +45,7 @@
           }
         }
       },
-      "Microsoft.Extensions.DependencyInjection.Abstractions/9.0.16": {
+      "Microsoft.Extensions.DependencyInjection.Abstractions/9.0.17": {
         "type": "package",
         "compile": {
           "lib/net9.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll": {
@@ -61,10 +61,10 @@
           "buildTransitive/net8.0/_._": {}
         }
       },
-      "Microsoft.Extensions.Logging.Abstractions/9.0.16": {
+      "Microsoft.Extensions.Logging.Abstractions/9.0.17": {
         "type": "package",
         "dependencies": {
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "9.0.16"
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "9.0.17"
         },
         "compile": {
           "lib/net9.0/Microsoft.Extensions.Logging.Abstractions.dll": {
@@ -80,11 +80,11 @@
           "buildTransitive/net8.0/Microsoft.Extensions.Logging.Abstractions.targets": {}
         }
       },
-      "Microsoft.Extensions.Options/9.0.16": {
+      "Microsoft.Extensions.Options/9.0.17": {
         "type": "package",
         "dependencies": {
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "9.0.16",
-          "Microsoft.Extensions.Primitives": "9.0.16"
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "9.0.17",
+          "Microsoft.Extensions.Primitives": "9.0.17"
         },
         "compile": {
           "lib/net9.0/Microsoft.Extensions.Options.dll": {
@@ -100,7 +100,7 @@
           "buildTransitive/net8.0/Microsoft.Extensions.Options.targets": {}
         }
       },
-      "Microsoft.Extensions.Primitives/9.0.16": {
+      "Microsoft.Extensions.Primitives/9.0.17": {
         "type": "package",
         "compile": {
           "lib/net9.0/Microsoft.Extensions.Primitives.dll": {
@@ -116,10 +116,10 @@
           "buildTransitive/net8.0/_._": {}
         }
       },
-      "Polly/8.6.6": {
+      "Polly/8.7.0": {
         "type": "package",
         "dependencies": {
-          "Polly.Core": "8.6.6"
+          "Polly.Core": "8.7.0"
         },
         "compile": {
           "lib/net6.0/Polly.dll": {
@@ -132,7 +132,7 @@
           }
         }
       },
-      "Polly.Core/8.6.6": {
+      "Polly.Core/8.7.0": {
         "type": "package",
         "compile": {
           "lib/net8.0/Polly.Core.dll": {
@@ -204,10 +204,10 @@
         "mediatr.contracts.nuspec"
       ]
     },
-    "Microsoft.Extensions.DependencyInjection.Abstractions/9.0.16": {
-      "sha512": "nluyqL58OHcU2M1qFx2QXBa0miA4yUfQBX2J98hHKRrsigtVEJzQYPMDhwDeBaX4qyjI3f3rX+uOsP5lAwPJpg==",
+    "Microsoft.Extensions.DependencyInjection.Abstractions/9.0.17": {
+      "sha512": "/Oy6N+l6aBqKKnjpBhH2MSzzKV+UbjDELuk/OkwJW0auMqWZm14aK7n+QGjscH7JosoI1ChTWf4utUGEA6m2RA==",
       "type": "package",
-      "path": "microsoft.extensions.dependencyinjection.abstractions/9.0.16",
+      "path": "microsoft.extensions.dependencyinjection.abstractions/9.0.17",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
@@ -229,15 +229,15 @@
         "lib/netstandard2.0/Microsoft.Extensions.DependencyInjection.Abstractions.xml",
         "lib/netstandard2.1/Microsoft.Extensions.DependencyInjection.Abstractions.dll",
         "lib/netstandard2.1/Microsoft.Extensions.DependencyInjection.Abstractions.xml",
-        "microsoft.extensions.dependencyinjection.abstractions.9.0.16.nupkg.sha512",
+        "microsoft.extensions.dependencyinjection.abstractions.9.0.17.nupkg.sha512",
         "microsoft.extensions.dependencyinjection.abstractions.nuspec",
         "useSharedDesignerContext.txt"
       ]
     },
-    "Microsoft.Extensions.Logging.Abstractions/9.0.16": {
-      "sha512": "dxeqqtPo1y1HjOKehfGiFWALIVw2dj0pMsPW412ksvKE6k54ZBEQ7/9xAdVpE7Mh5BboJOV58PC7gdATmxKkSA==",
+    "Microsoft.Extensions.Logging.Abstractions/9.0.17": {
+      "sha512": "b1onT7ZvIrpkQ9swhLqSuj1eKvOtElXig2tk7b3ckBfXUu//Y6P7rzz15qTW0SCyYqanoflPYNQ76kqGutQ3iw==",
       "type": "package",
-      "path": "microsoft.extensions.logging.abstractions/9.0.16",
+      "path": "microsoft.extensions.logging.abstractions/9.0.17",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
@@ -300,15 +300,15 @@
         "lib/net9.0/Microsoft.Extensions.Logging.Abstractions.xml",
         "lib/netstandard2.0/Microsoft.Extensions.Logging.Abstractions.dll",
         "lib/netstandard2.0/Microsoft.Extensions.Logging.Abstractions.xml",
-        "microsoft.extensions.logging.abstractions.9.0.16.nupkg.sha512",
+        "microsoft.extensions.logging.abstractions.9.0.17.nupkg.sha512",
         "microsoft.extensions.logging.abstractions.nuspec",
         "useSharedDesignerContext.txt"
       ]
     },
-    "Microsoft.Extensions.Options/9.0.16": {
-      "sha512": "y6d58Ua9dJYrEKfcWFoPnA/K8id/WEIpcvAhk5Iu7w3vIBTQNmHhurWKAYuesfuLaZhHEKOXueruRp4l0Y74Vw==",
+    "Microsoft.Extensions.Options/9.0.17": {
+      "sha512": "+UNeX4y+YJ4CNzwKy8Gf2pOo2++CGFLHFha9QbzUrsutLVne6O8CD+Khz9aWuSkm+l4Wzqa7+qhyC1OGENuQ6g==",
       "type": "package",
-      "path": "microsoft.extensions.options/9.0.16",
+      "path": "microsoft.extensions.options/9.0.17",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
@@ -345,15 +345,15 @@
         "lib/netstandard2.0/Microsoft.Extensions.Options.xml",
         "lib/netstandard2.1/Microsoft.Extensions.Options.dll",
         "lib/netstandard2.1/Microsoft.Extensions.Options.xml",
-        "microsoft.extensions.options.9.0.16.nupkg.sha512",
+        "microsoft.extensions.options.9.0.17.nupkg.sha512",
         "microsoft.extensions.options.nuspec",
         "useSharedDesignerContext.txt"
       ]
     },
-    "Microsoft.Extensions.Primitives/9.0.16": {
-      "sha512": "w5RE1MR0lnAElsRJaFd2POIXl/H62aBKmfX8ibYmRmbk0JB9V/9jR0VD5NxiP1ETWpnDAnPguTSe7fF/FdsHEQ==",
+    "Microsoft.Extensions.Primitives/9.0.17": {
+      "sha512": "WBjZ/zeb6PyCLT6lpGSzNtdMyRDloFSPqjY9kIGb5rdSng03rd0+ix/jDEYU6DUjE7JVLuhggXeMONVBxBHEXg==",
       "type": "package",
-      "path": "microsoft.extensions.primitives/9.0.16",
+      "path": "microsoft.extensions.primitives/9.0.17",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
@@ -373,15 +373,15 @@
         "lib/net9.0/Microsoft.Extensions.Primitives.xml",
         "lib/netstandard2.0/Microsoft.Extensions.Primitives.dll",
         "lib/netstandard2.0/Microsoft.Extensions.Primitives.xml",
-        "microsoft.extensions.primitives.9.0.16.nupkg.sha512",
+        "microsoft.extensions.primitives.9.0.17.nupkg.sha512",
         "microsoft.extensions.primitives.nuspec",
         "useSharedDesignerContext.txt"
       ]
     },
-    "Polly/8.6.6": {
-      "sha512": "czKHYJ6uGowPijuZt4kgF4njfGvWxVZ8mKBcrZ9iEtwDe9HKdF0ug6p6TwUG8EHuuufgbDU//rSBFebt5/0Fyw==",
+    "Polly/8.7.0": {
+      "sha512": "0qR4f0OR8FeCAfLWcfwzAM7w6EmpUgwa22PgxKjcL25dEAto7sKpQQXbtxp38vVvK+V3RFkh/TeI7g/iUdoYIQ==",
       "type": "package",
-      "path": "polly/8.6.6",
+      "path": "polly/8.7.0",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
@@ -400,14 +400,14 @@
         "lib/netstandard2.0/Polly.xml",
         "package-icon.png",
         "package-readme.md",
-        "polly.8.6.6.nupkg.sha512",
+        "polly.8.7.0.nupkg.sha512",
         "polly.nuspec"
       ]
     },
-    "Polly.Core/8.6.6": {
-      "sha512": "lCBL9mmhF9TZxHG3beVRkyjlLohkIC464xIAq7J7Y59C+z42hmsdUaeCKl2SIAYertOUU5TeBXyQDLDQGIKePQ==",
+    "Polly.Core/8.7.0": {
+      "sha512": "BS2t+nsBer16PIebCEPNBK5fgMisADQyRCd7K+BgkMWpFmSaiYE+rVVNpFhGRqUkJmNSLmw0uCNzHHWfgml28Q==",
       "type": "package",
-      "path": "polly.core/8.6.6",
+      "path": "polly.core/8.7.0",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
@@ -429,7 +429,7 @@
         "lib/netstandard2.0/Polly.Core.xml",
         "package-icon.png",
         "package-readme.md",
-        "polly.core.8.6.6.nupkg.sha512",
+        "polly.core.8.7.0.nupkg.sha512",
         "polly.core.nuspec"
       ]
     }
@@ -529,7 +529,7 @@
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.108/PortableRuntimeIdentifierGraph.json",
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.109/PortableRuntimeIdentifierGraph.json",
         "packagesToPrune": {
           "Microsoft.CSharp": "(,4.7.32767]",
           "Microsoft.VisualBasic": "(,10.4.32767]",

@@ -1,295 +1,166 @@
-# logs2obs Architecture
+# Architecture
 
-## Overview
+This document explains how logs2obs is structured, how data moves through the system, and where key responsibilities live.
 
-logs2obs uses **hexagonal architecture** (ports and adapters pattern) to achieve cloud-agnostic design. The domain core contains all business logic; infrastructure adapters are swappable. This document describes the system architecture, service responsibilities, messaging topology, and tier routing strategy.
+## Architectural Style
 
-## Architecture Diagram
+logs2obs follows a hexagonal architecture:
 
+- `Logs2Obs.Core` defines domain models, commands, query abstractions, validation, mapping, and orchestration logic.
+- Adapter projects (`Logs2Obs.Adapters.Local`, `Logs2Obs.Adapters.Aws`) implement infrastructure interfaces from Core.
+- Host projects (`Logs2Obs.Api`, `Logs2Obs.Worker`, `Logs2Obs.QueryEngine`, `Logs2Obs.Puller`) wire dependencies, expose protocols, and run background workflows.
+
+This separation keeps domain logic provider-agnostic while allowing runtime selection via `Logs2Obs__Provider`.
+
+## Component Overview
+
+```mermaid
+flowchart LR
+  Clients[Clients and Services] --> API[Logs2Obs.Api]
+  API --> MB[(Message Bus)]
+  API --> QE[Logs2Obs.QueryEngine]
+  API --> META[(Metadata Store)]
+
+  Puller[Logs2Obs.Puller] --> MB
+  MB --> Worker[Logs2Obs.Worker]
+
+  Worker --> OBJ[(Object Store Parquet)]
+  Worker --> SEARCH[(Search Index)]
+  Worker --> META
+
+  QE --> SEARCH
+  QE --> OBJ
+  QE --> META
+  QE --> CACHE[(Redis MatViews Cache)]
+
+  API --> AUTH[Auth and Tenant Middleware]
+  API --> RL[Rate Limiting]
 ```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                              PRODUCERS / SOURCES                                │
-│  App Logs │ Error Logs │ Network/OS │ Metrics │ S3 │ Cloud Logs │ Kafka │ HTTP  │
-└──────┬────┴──────┬──────┴──────┬─────┴────┬───┴────┴──────┬─────┴───────┴──────┘
-       │           │             │          │               │
-       ▼           ▼             ▼          ▼               │
-┌──────────────────────────────────────────────────────┐    │
-│           Logs2Obs.Api  (.NET 10)                     │◄───┘
-│   ASP.NET Core 10 — Minimal APIs + gRPC endpoints     │
-│                                                       │
-│  ┌───────────────────────┐  ┌────────────────────┐    │
-│  │  Token-Bucket Rate    │  │  Auth Middleware    │    │
-│  │  Limiter (per-tenant) │  │  (ApiKey │ JWT)     │    │
-│  └──────────┬────────────┘  └────────────────────┘    │
-│  ┌──────────▼──────────────────────────────────────┐  │
-│  │  MediatR Command Pipeline                        │  │
-│  │  IngestLogsCommand → IngestLogsHandler           │  │
-│  └──────────────────────┬───────────────────────────┘  │
-└─────────────────────────┼──────────────────────────────┘
-                          │  IMessageBus.PublishAsync
-                          ▼
-┌──────────────────────────────────────────────────────────────┐
-│            IMessageBus (Cloud-Agnostic Abstraction)           │
-│  AWS: SNS → SQS fanout   │  Azure: Service Bus Topics        │
-│  GCP: Pub/Sub            │  Local: RabbitMQ exchanges         │
-│                                                              │
-│  [2 Topics] → [8 Queues + 4 DLQs] (see Fanout Pattern)      │
-└───────────────────────────┬──────────────────────────────────┘
-                            │ Per-consumer queues
-          ┌─────────────────┼────────────────┬─────────────────┐
-          ▼                 ▼                ▼                 ▼
-  [storage-writer]  [search-indexer] [alert-evaluator] [pull-job-events]
-          │                 │                │
-          ▼                 ▼                ▼
-┌─────────────────────────────────────────────────────────────┐
-│         Logs2Obs.Worker  (.NET 10 Worker Service)            │
-│  IIdempotencyStore check → normalize → validate → route      │
-│  Bounded Channel<LogEntry> pipelines (backpressure)          │
-│  Parallel Parquet batching │ Bulk OpenSearch indexing         │
-│  Polly retry policies on all external calls                  │
-└─────────────────────┬───────────────────────────────────────┘
-                      │
-        ┌─────────────┼──────────────┐
-        ▼             ▼              ▼
-┌──────────────┐ ┌──────────┐ ┌──────────────────┐
-│ IObjectStore │ │ISearchIdx│ │  IMetadataStore   │
-│ S3/Blob/GCS/ │ │OpenSearch│ │  DynamoDB/Cosmos/ │
-│ MinIO        │ │MeiliSrch │ │  Firestore/PgSQL  │
-│              │ │          │ │                   │
-│  ILM Policy  │ │ILM Policy│ │ ISchemaRegistry   │
-└──────┬───────┘ └────┬─────┘ │ IIdempotencyStore │
-       │              │       └──────────────────┘
-       ▼              │
-┌──────────────────┐  │
-│  IQueryEngine    │◄─┘
-│  Athena/Synapse/ │
-│  BigQuery/DuckDB │
-│  + Cost Guard    │
-│  + Replay Svc    │
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────────────────────────────────────────────┐
-│       Logs2Obs.QueryEngine  (.NET 10)                     │
-│  QueryTierRouter → Hot │ Warm │ Cold │ Cross-Tier          │
-│  SQL Safety Validator (ISqlSafetyValidator)               │
-│  Cost Estimator → user confirmation for large scans       │
-│  AI: NL→SQL (GitHub Models / Ollama) + safety layer       │
-│  Graph Engine: Vega-Lite + Chart.js specs                 │
-│  Materialized Views refresh engine                        │
-│  Alert evaluation + IReplayService                        │
-└──────────────────────────────────────────────────────────┘
-                         │
-                         ▼
-┌──────────────────────────────────────────────────────────┐
-│  Self-Observability: OpenTelemetry → Prometheus / OTEL    │
-│  /health/ready │ /health/live │ /metrics                  │
-│  Internal: ingestion_rate, queue_lag, processing_latency  │
-└──────────────────────────────────────────────────────────┘
-```
-
-## Hexagonal Architecture
-
-logs2obs strictly separates **domain logic** (Core) from **infrastructure** (Adapters). The Core defines **ports** (interfaces); adapters implement them.
-
-```
-┌──────────────────────────────────────────────────┐
-│                  DOMAIN CORE                     │
-│             (Logs2Obs.Core)                      │
-│                                                  │
-│  ┌──────────────────────────────────────┐        │
-│  │  Domain Models (LogEntry, QueryExec)│        │
-│  │  MediatR Handlers (IngestLogsHandler)│       │
-│  │  Validation (FluentValidation)       │       │
-│  │  Business Rules (SchemaInference,    │       │
-│  │    QueryTierRouter, GraphSuggestion) │       │
-│  └──────────────────────────────────────┘        │
-│                                                  │
-│  ┌──────────────────────────────────────┐        │
-│  │         PORTS (Interfaces)            │        │
-│  │  IMessageBus, IObjectStore,          │        │
-│  │  ISearchIndexer, IQueryEngine,       │        │
-│  │  IMetadataStore, ISecretStore,       │        │
-│  │  IIdempotencyStore, IAiService       │        │
-│  └──────────────────────────────────────┘        │
-└──────────────────────────────────────────────────┘
-                     │
-       ┌─────────────┼──────────────┐
-       ▼             ▼              ▼
-┌────────────┐ ┌────────────┐ ┌────────────┐
-│  Adapters  │ │  Adapters  │ │  Adapters  │
-│   .Local   │ │    .Aws    │ │   .Azure   │
-│            │ │            │ │            │
-│ MinIO      │ │ S3         │ │ Blob Store │
-│ RabbitMQ   │ │ SNS+SQS    │ │ Svc Bus    │
-│ DuckDB     │ │ Athena     │ │ Synapse    │
-│ MeiliSrch  │ │ OpenSearch │ │ —          │
-│ PostgreSQL │ │ DynamoDB   │ │ CosmosDB   │
-│ Redis      │ │ ElastiCache│ │ —          │
-└────────────┘ └────────────┘ └────────────┘
-
-```
-
-**Benefits:**
-- Core has **zero cloud SDK dependencies** — testable without infrastructure
-- Swap providers by changing DI registration: `services.AddLocalAdapters()` → `services.AddAwsAdapters()`
-- New provider = new adapter project implementing 9 core interfaces
 
 ## Service Responsibilities
 
-| Service | Port | Responsibility |
-|---|---|---|
-| **Logs2Obs.Api** | 8080 (HTTP), 5001 (gRPC) | HTTP/gRPC ingestion, authentication (API key + JWT), per-tenant rate limiting, request validation, MediatR dispatch, message bus publish |
-| **Logs2Obs.Worker** | — | Consume SQS/RabbitMQ, idempotency check (Redis), normalize/enrich entries, batch Parquet writes (S3/MinIO), bulk index to OpenSearch/MeiliSearch |
-| **Logs2Obs.Puller** | — | Pull connectors: AWS S3, Azure Blob, GCS, HTTP; scheduled jobs (cron); parse log formats (W3C, JSON, syslog); publish to message bus |
-| **Logs2Obs.QueryEngine** | 8081 | DuckDB/Athena query execution, tier routing (hot/warm/cold), cost estimation + guardrails, materialized view refresh, alert rule evaluation, replay orchestration |
+### `Logs2Obs.Api`
 
-## Fanout Pattern: SNS Topics and SQS Queues
+- Exposes REST and gRPC ingest/query APIs.
+- Authenticates callers using API key or JWT.
+- Applies tenant-aware rate limiting.
+- Publishes ingestion workloads to queue-based processing.
+- Proxies/coordinates query and analytics features.
 
-When the API receives a log entry, it publishes **once** to SNS; SNS fans out to **multiple independent SQS queues**. Each consumer (Worker, QueryEngine) has its own queue and processes at its own rate — no coupling.
+See:
 
-### SNS Topics (2)
+- [api-reference.md](api-reference.md)
+- [security.md](security.md)
+- [../src/Logs2Obs.Api/README.md](../src/Logs2Obs.Api/README.md)
 
-| Topic | Type | Purpose |
-|-------|------|---------|
-| `logs2obs-ingest` | Standard | All incoming log/metric entries — main fanout hub |
-| `logs2obs-system-events` | Standard | Internal events: job complete, crawler trigger, alert fired, replay started |
+### `Logs2Obs.Worker`
 
-**Why Standard (not FIFO)?** FIFO SNS/SQS caps at 3,000 msg/sec with batching. Logs carry their own `timestamp`; delivery order is irrelevant. Standard queues support unlimited throughput.
+- Consumes queue messages from ingestion fanout.
+- Performs idempotency checks.
+- Writes normalized data to Parquet/object storage.
+- Updates search index for low-latency retrieval.
 
-### SQS Queues (8 Main + 4 DLQs)
+See:
 
-| Queue | SNS Subscription | Consumer | DLQ | Max Receive Count |
-|-------|-----------------|---------|-----|-------------------|
-| `ls-storage-writer` | `logs2obs-ingest` | Worker | `ls-storage-writer-dlq` | 3 |
-| `ls-search-indexer` | `logs2obs-ingest` | Worker | `ls-search-indexer-dlq` | 3 |
-| `ls-alert-evaluator` | `logs2obs-ingest` | QueryEngine | `ls-alert-evaluator-dlq` | 3 |
-| `ls-matview-refresh` | `logs2obs-ingest` | QueryEngine | `ls-matview-refresh-dlq` | 3 |
-| `ls-pull-job-events` | `logs2obs-system-events` | Puller | `ls-pull-job-events-dlq` | 3 |
-| `ls-replay-events` | `logs2obs-system-events` | Worker | `ls-replay-events-dlq` | 3 |
-| `ls-report-scheduler` | `logs2obs-system-events` | QueryEngine | `ls-report-scheduler-dlq` | 3 |
-| `ls-idempotency-expire` | `logs2obs-system-events` | Worker | `ls-idempotency-expire-dlq` | 3 |
+- [../src/Logs2Obs.Worker/README.md](../src/Logs2Obs.Worker/README.md)
+- [replay-guide.md](replay-guide.md)
 
-**Total:** 2 SNS Topics + 8 SQS Queues + 8 DLQs = **18 messaging resources**
+### `Logs2Obs.QueryEngine`
 
-### Fanout Flow
+- Routes queries to hot/warm/cold execution paths.
+- Handles query cost estimation and execution policies.
+- Supports graph generation and materialized-view access.
+- Coordinates replay, alert, and analytics workloads.
 
-```
-  API publishes once ──►  SNS: logs2obs-ingest  (Standard, ~unlimited throughput)
-                                    │
-              ┌─────────────────────┼────────────────────┬───────────────────────┐
-              ▼                     ▼                    ▼                       ▼
-    SQS: storage-writer   SQS: search-indexer   SQS: alert-evaluator  SQS: matview-refresh
-    (+ DLQ)               (+ DLQ)               (+ DLQ)               (+ DLQ)
-         │                     │                     │                      │
-    Worker: Parquet       Worker: OpenSearch     QueryEngine:          QueryEngine:
-    batch write           bulk index             alert rules           aggregation update
-```
+See:
 
-**Why separate queues?**
-- **Independent scaling** — search indexer can scale to 20 pods while storage writer needs only 5
-- **Independent retry policies** — OpenSearch bulk errors retry 3×; Parquet write failures go to DLQ immediately
-- **Failure isolation** — if search indexing fails, storage writes continue unaffected
+- [query-guide.md](query-guide.md)
+- [graph-guide.md](graph-guide.md)
+- [materialized-views.md](materialized-views.md)
+- [../src/Logs2Obs.QueryEngine/README.md](../src/Logs2Obs.QueryEngine/README.md)
 
-## Tier Routing: Hot / Warm / Cold
+### `Logs2Obs.Puller`
 
-logs2obs routes queries to the appropriate storage tier based on the time range. This balances **latency** (hot tier = fast) with **cost** (cold tier = cheap).
+- Pulls logs from scheduled sources (cloud/object/http connectors).
+- Normalizes pulled payloads into ingest pipeline messages.
+- Publishes to downstream worker queues.
 
-| Tier | Engine | Time Range | Storage | Latency | Use Case |
-|---|---|---|---|---|---|
-| **Hot** | OpenSearch / MeiliSearch | Last 3 days (configurable per tenant) | Index in memory/SSD | <200ms | Real-time dashboards, full-text search, log tailing |
-| **Warm** | DuckDB / Athena | 4–90 days | Parquet on S3/MinIO (Standard storage) | <5s | Ad-hoc SQL queries, weekly reports, debugging incidents |
-| **Cold** | DuckDB / Athena | >90 days | Parquet on S3 Glacier / Azure Archive | <30s | Compliance queries, yearly audits, historical analysis |
-| **CrossTier** | Parallel query + merge | Spans multiple tiers (e.g., "last 7 days" when hot = 3 days) | Queries hot + warm in parallel | varies | Date ranges crossing tier boundaries |
+See:
 
-### Tier Selection Examples
+- [../src/Logs2Obs.Puller/README.md](../src/Logs2Obs.Puller/README.md)
+- [replay-guide.md](replay-guide.md)
 
-1. **"Show errors in the last hour"** → Hot tier (OpenSearch aggregation, <200ms)
-2. **"Count fatal errors yesterday"** → Warm tier (DuckDB local Parquet scan, <2s)
-3. **"Top errors in March 2025"** → Cold tier (Athena on S3 Standard, 3–10s depending on partition size)
-4. **"Weekly error trend for last 14 days"** (hot = 3 days) → CrossTier (parallel: hot for days 0–3, warm for days 4–14, merge results)
-5. **"All errors in 2024"** → Cold tier (Athena Glacier restore may take minutes; user confirmation required if cost >$0.50)
+### `Logs2Obs.Adapters.Local` and `Logs2Obs.Adapters.Aws`
 
-## Cloud Provider Mapping
+- Provide concrete implementations for object store, metadata store, message bus, scheduler, query providers, secrets, and search.
+- Enable the same Core logic to run against Local dev stack or AWS services.
 
-| Component | Local (Dev) | AWS | Azure | GCP |
-|---|---|---|---|---|
-| **Object Store** | MinIO (S3-compatible) | S3 (Standard → Glacier) | Blob Storage (Hot → Archive) | Google Cloud Storage |
-| **Message Bus** | RabbitMQ (exchanges + queues) | SNS (topics) + SQS (queues) | Service Bus (topics + subscriptions) | Pub/Sub (topics + subscriptions) |
-| **Query Engine** | DuckDB (embedded) | Athena (serverless Presto) | Synapse Serverless SQL | BigQuery |
-| **Search Index** | MeiliSearch (embedded) | OpenSearch Service (managed) | — (use Synapse for full-text) | — (use BigQuery for full-text) |
-| **Metadata Store** | PostgreSQL (docker) | DynamoDB (NoSQL) | Cosmos DB (NoSQL) | Firestore (NoSQL) |
-| **Cache / Idempotency** | Redis (docker) | ElastiCache (Redis) | Azure Cache for Redis | Memorystore (Redis) |
-| **Secrets** | appsettings.json | Secrets Manager | Key Vault | Secret Manager |
-| **Auth** | API keys in PostgreSQL | Cognito | Entra ID (Azure AD) | Firebase Auth |
+See:
 
-**Switch providers:** Set `Logs2Obs__Provider=Aws` in environment variables. All adapter interfaces remain identical; only DI registration changes.
+- [../src/Logs2Obs.Adapters.Local/README.md](../src/Logs2Obs.Adapters.Local/README.md)
+- [codebase-map.md](codebase-map.md)
 
-## Data Flow: Ingest to Query
+## Ingestion Data Flow
 
-### 1. Ingestion Flow
+```mermaid
+sequenceDiagram
+  participant C as Client
+  participant A as Logs2Obs.Api
+  participant B as Message Bus
+  participant W as Logs2Obs.Worker
+  participant O as Object Store
+  participant S as Search Index
 
-```
-1. Client → POST /api/v1/logs (with X-Api-Key or JWT Bearer)
-2. TenantContextMiddleware extracts tenantId from auth
-3. PayloadSizeMiddleware rejects requests >10 MB
-4. Rate limiter checks tenant quota (token bucket: 1000 tokens, refill 500/sec)
-5. FluentValidation validates LogEntryDto (required fields, enum values)
-6. MediatR dispatches IngestLogsCommand
-7. IngestLogsHandler:
-   a. Maps DTO → LogEntry domain model (generates UUIDv7 Id, sets TenantId, IngestedAt)
-   b. Publishes to IMessageBus (SNS/RabbitMQ topic: logs2obs-ingest)
-8. API returns 202 Accepted { accepted: 1, requestId: "..." }
-9. SNS fans out to 4 SQS queues:
-   - storage-writer (Worker writes Parquet to S3)
-   - search-indexer (Worker bulk-indexes to OpenSearch)
-   - alert-evaluator (QueryEngine evaluates active alerts)
-   - matview-refresh (QueryEngine updates pre-aggregated views)
+  C->>A: POST /api/v1/logs or gRPC stream
+  A->>A: Auth, tenant resolution, validation, rate limiting
+  A->>B: Publish ingestion messages
+  B->>W: Deliver messages to workers
+  W->>W: Idempotency + normalization
+  W->>O: Write Parquet batches
+  W->>S: Bulk index searchable fields
 ```
 
-### 2. Query Flow
+## Query Flow
 
+```mermaid
+sequenceDiagram
+  participant C as Client
+  participant A as Logs2Obs.Api
+  participant Q as Logs2Obs.QueryEngine
+  participant H as Hot Tier Search
+  participant W as Warm Tier Parquet
+  participant K as Cold Tier Parquet
+
+  C->>A: POST /api/v1/query/sql or /query/natural
+  A->>Q: Forward validated query
+  Q->>Q: Tier routing and optional cost estimation
+  alt Hot
+    Q->>H: Execute
+  else Warm
+    Q->>W: Execute
+  else Cold
+    Q->>K: Execute
+  else CrossTier
+    Q->>H: Execute partial
+    Q->>W: Execute partial
+    Q->>K: Execute partial
+    Q->>Q: Merge result sets
+  end
+  Q-->>A: Query results and metadata
+  A-->>C: API response
 ```
-1. Client → POST /api/v1/query/sql { sql: "SELECT ...", async: true }
-2. SqlSafetyValidator checks SQL:
-   - No DML/DDL (DROP, DELETE, INSERT, UPDATE, ALTER)
-   - CROSS JOIN warning (performance risk)
-   - Partition filter present (year, month, day)
-   - LIMIT clause present
-3. QueryTierRouter analyzes time range:
-   - Partition filters: year=2026, month=03, day=23
-   - Tier decision: Hot (within last 3 days)
-4. If async=true:
-   a. Create QueryExecution record (status: Running, queryId)
-   b. Dispatch to background queue (IMessageBus: query-exec topic)
-   c. Return 202 { queryId, status: "Running" }
-5. QueryEngine worker:
-   a. Route to IQueryEngine (DuckDBQueryEngine or AthenaQueryEngine)
-   b. Execute query (tenant filter auto-injected: WHERE tenantId='...')
-   c. Cost guard: estimate scan size; if >10 GB, require user confirmation
-   d. Stream results to IMetadataStore (partitioned by queryId)
-6. Client polls: GET /api/v1/query/{queryId}/results
-7. Return: { status: "Completed", results: { columns, rows }, executionTimeMs }
-```
 
-## Self-Observability
+## Cross-Cutting Concerns
 
-All services export:
-- **OpenTelemetry traces** (Activity API) to Prometheus or OTEL Collector
-- **Prometheus metrics** at `/metrics` endpoint
-- **Health checks** at `/health/ready` (dependencies up) and `/health/live` (process alive)
+- Authentication and tenant isolation: [security.md](security.md)
+- API contracts and endpoint behavior: [api-reference.md](api-reference.md)
+- Tier routing and query efficiency: [query-guide.md](query-guide.md)
+- Schema lifecycle: [schema-evolution.md](schema-evolution.md)
+- Replay and recovery workflows: [replay-guide.md](replay-guide.md)
+- Operational readiness and incident response: [runbooks/incident-response.md](runbooks/incident-response.md)
 
-**Key metrics:**
-- `logs2obs_ingestion_rate` — entries/sec per tenant
-- `logs2obs_queue_lag_seconds` — SQS message age (detect backlog)
-- `logs2obs_processing_latency_ms` — ingest-to-index latency
-- `logs2obs_duplicate_rate` — idempotency hit rate (should be <1%)
-- `logs2obs_query_execution_time_ms` — query latency by tier (hot/warm/cold)
-- `logs2obs_cost_estimate_usd` — estimated query cost before execution
+## Related Documents
 
-**Alerting:**
-- Queue lag >300 seconds → scale Worker pods
-- Duplicate rate >5% → investigate client retry logic
-- OpenSearch indexing errors >10/min → check cluster health
-
-See [local-development.md](local-development.md) for Grafana dashboard setup.
+- [README.md](README.md)
+- [codebase-map.md](codebase-map.md)
+- [local-development.md](local-development.md)
